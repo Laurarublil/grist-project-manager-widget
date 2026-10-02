@@ -74,7 +74,7 @@ var i18n = {
     fieldGroup: 'Groupe',
     fieldStartDate: 'Date de début',
     fieldDueDate: 'Échéance',
-    fieldCategory: 'Catégorie',
+    fieldCategory: 'Produit',
     fieldEstimatedTime: 'Temps estimé (h)',
     priorityHigh: 'Haute',
     priorityMedium: 'Moyenne',
@@ -163,9 +163,9 @@ var i18n = {
     noProject: 'Sans projet',
     projectSearchPlaceholder: 'Rechercher un projet...',
     tabSettings: 'Paramètres',
-    settingsSubtitle: 'Configurez vos projets, catégories et autres options',
+    settingsSubtitle: 'Configurez vos projets, produits et autres options',
     projectsSubtitle: 'Gérez vos projets',
-    categoriesSubtitle: 'Gérez les catégories de tâches',
+    categoriesSubtitle: 'Gérez les produits de tâches',
     tagsSubtitle: 'Gérez les tags pour vos tâches',
     addCategory: 'Ajouter',
     tagName: 'Nom du tag',
@@ -174,7 +174,7 @@ var i18n = {
     totalTemplates: 'Total modèles',
     totalUsages: 'Utilisations totales',
     mostUsed: 'Plus utilisé',
-    categories: 'Catégories',
+    categories: 'Produits',
     tabTeam: 'Équipe',
     teamUsersTitle: 'Utilisateurs',
     teamUsersSubtitle: 'Gérez les membres de votre équipe',
@@ -289,12 +289,12 @@ var i18n = {
     customFieldCreated: 'Champ créé',
     customFieldDeleted: 'Champ supprimé',
     noCustomFields: 'Aucun champ personnalisé',
-    categories: 'Catégories',
-    manageCategories: 'Gérer les catégories',
+    categories: 'Produits',
+    manageCategories: 'Gérer les produits',
     addCategory: 'Ajouter',
-    categoryCreated: 'Catégorie créée',
-    categoryDeleted: 'Catégorie supprimée',
-    noCategories: 'Aucune catégorie',
+    categoryCreated: 'Produit créé',
+    categoryDeleted: 'Produit supprimé',
+    noCategories: 'Aucun produit',
     chartTimeline: 'Charge dans le temps par agent',
     chartBurndown: 'Burndown / Burnup',
     burnRemaining: 'Restantes',
@@ -416,7 +416,7 @@ var i18n = {
     fieldGroup: 'Group',
     fieldStartDate: 'Start date',
     fieldDueDate: 'Due date',
-    fieldCategory: 'Category',
+    fieldCategory: 'Product',
     fieldEstimatedTime: 'Estimated time (h)',
     priorityHigh: 'High',
     priorityMedium: 'Medium',
@@ -501,9 +501,9 @@ var i18n = {
     noProject: 'No project',
     projectSearchPlaceholder: 'Search a project...',
     tabSettings: 'Settings',
-    settingsSubtitle: 'Configure your projects, categories and other options',
+    settingsSubtitle: 'Configure your projects, products and other options',
     projectsSubtitle: 'Manage your projects',
-    categoriesSubtitle: 'Manage task categories',
+    categoriesSubtitle: 'Manage task products',
     tagsSubtitle: 'Manage tags for your tasks',
     addCategory: 'Add',
     tagName: 'Tag name',
@@ -516,7 +516,7 @@ var i18n = {
     totalTemplates: 'Total templates',
     totalUsages: 'Total usages',
     mostUsed: 'Most used',
-    categories: 'Categories',
+    categories: 'Products',
     tabTeam: 'Team',
     teamUsersTitle: 'Users',
     teamUsersSubtitle: 'Manage your team members',
@@ -631,12 +631,12 @@ var i18n = {
     customFieldCreated: 'Field created',
     customFieldDeleted: 'Field deleted',
     noCustomFields: 'No custom fields',
-    categories: 'Categories',
-    manageCategories: 'Manage categories',
+    categories: 'Products',
+    manageCategories: 'Manage products',
     addCategory: 'Add',
-    categoryCreated: 'Category created',
-    categoryDeleted: 'Category deleted',
-    noCategories: 'No categories',
+    categoryCreated: 'Product created',
+    categoryDeleted: 'Product deleted',
+    noCategories: 'No products',
     chartTimeline: 'Workload over time per assignee',
     chartBurndown: 'Burndown / Burnup',
     burnRemaining: 'Remaining',
@@ -2012,7 +2012,7 @@ async function ensureTables() {
         ['task_group', TASKS_TABLE, 'Group_Name', 'Groupe', false, 'Group_Name'],
         ['task_start_date', TASKS_TABLE, 'Start_Date', 'Date début', false, 'Start_Date'],
         ['task_due_date', TASKS_TABLE, 'Due_Date', 'Échéance', false, 'Due_Date'],
-        ['task_category', TASKS_TABLE, 'Category', 'Catégorie', false, 'Category'],
+        ['task_category', TASKS_TABLE, 'Category', 'Produit', false, 'Category'],
         ['task_tag', TASKS_TABLE, 'Tag', 'Tag', false, 'Tag'],
         ['task_recurrence', TASKS_TABLE, 'Recurrence', 'Récurrence', false, 'Recurrence'],
         ['task_estimated_hours', TASKS_TABLE, 'Estimated_Hours', 'Heures estimées', false, 'Estimated_Hours'],
@@ -2641,12 +2641,12 @@ function renderProjectSelector() {
   });
   html += buildFilterCombo('person', currentLang === 'fr' ? '— Personne —' : '— Person —', personOptions, currentFilterAssignee, filterByAssignee);
 
-  // Filtre Catégorie
+  // Filtre Produit
   var allCategories = [];
   tasks.forEach(function(t) { if (t.Category && allCategories.indexOf(t.Category) === -1) allCategories.push(t.Category); });
   allCategories.sort();
   var catOptions = allCategories.map(function(c) { return { value: c, label: c }; });
-  html += buildFilterCombo('category', currentLang === 'fr' ? '— Catégorie —' : '— Category —', catOptions, currentFilterCategory, filterByCategory);
+  html += buildFilterCombo('category', currentLang === 'fr' ? '— Produit —' : '— Product —', catOptions, currentFilterCategory, filterByCategory);
 
   // Filtre Tag
   var tagOptions = tags.map(function(tag) { return { value: tag.Name, label: tag.Name }; });
@@ -2752,7 +2752,7 @@ function buildFilterCombo(id, placeholder, options, selectedValue, onSelect) {
   h += '<div class="filter-combo-opt' + (!selectedValue ? ' selected' : '') + '" data-value="" data-label="' + sanitize(placeholder) + '" onclick="selectFilterCombo(\'' + id + '\', \'\')">' + sanitize(placeholder) + '</div>';
   options.forEach(function(o) {
     // La valeur est lue depuis data-value via getAttribute (dé-échappée par le
-    // navigateur) : une catégorie/tag avec & < > " arrive intacte au callback.
+    // navigateur) : un produit/tag avec & < > " arrive intact au callback.
     h += '<div class="filter-combo-opt' + (o.value === selectedValue ? ' selected' : '') + '" data-value="' + sanitize(o.value) + '" data-label="' + sanitize(o.label) + '" onclick="selectFilterComboEl(\'' + id + '\', this)">' + sanitize(o.label) + '</div>';
   });
   h += '</div></div></div>';
@@ -5600,7 +5600,7 @@ async function saveCategory() {
 
 async function deleteCategory(categoryId) {
   if (!isOwner) return;
-  var confirmed = await showConfirmModal(currentLang === 'fr' ? 'Supprimer cette catégorie ?' : 'Delete this category?', currentLang === 'fr' ? 'Supprimer' : 'Delete');
+  var confirmed = await showConfirmModal(currentLang === 'fr' ? 'Supprimer ce produit ?' : 'Delete this product?', currentLang === 'fr' ? 'Supprimer' : 'Delete');
   if (!confirmed) return;
 
   try {
@@ -9099,7 +9099,7 @@ function renderCardDisplaySettings() {
     { key: 'date',        label: currentLang === 'fr' ? 'Date d\'échéance' : 'Due date' },
     { key: 'assignee',    label: currentLang === 'fr' ? 'Assigné à' : 'Assignee' },
     { key: 'tags',        label: 'Tags' },
-    { key: 'category',    label: currentLang === 'fr' ? 'Catégorie' : 'Category' },
+    { key: 'category',    label: currentLang === 'fr' ? 'Produit' : 'Product' },
     { key: 'time',        label: currentLang === 'fr' ? 'Temps passé' : 'Time spent' },
     { key: 'subtasks',    label: currentLang === 'fr' ? 'Sous-tâches' : 'Subtasks' },
     { key: 'comments',    label: currentLang === 'fr' ? 'Commentaires' : 'Comments' }
@@ -9776,7 +9776,7 @@ function renderSettingsCategoriesList() {
   
   var html = '';
   if (categories.length === 0) {
-    html = '<div style="text-align:center;color:#94a3b8;padding:20px;">' + (currentLang === 'fr' ? 'Aucune catégorie' : 'No categories') + '</div>';
+    html = '<div style="text-align:center;color:#94a3b8;padding:20px;">' + (currentLang === 'fr' ? 'Aucun produit' : 'No products') + '</div>';
   } else {
     html = '<div class="settings-chips">';
     categories.forEach(function(cat) {
@@ -9921,7 +9921,7 @@ async function detectTaskColumns() {
       { key: 'group', label: 'Groupe', required: false },
       { key: 'startDate', label: 'Date début', required: false },
       { key: 'dueDate', label: 'Échéance', required: false },
-      { key: 'category', label: 'Catégorie', required: false },
+      { key: 'category', label: 'Produit', required: false },
       { key: 'tag', label: 'Tag', required: false },
       { key: 'recurrence', label: 'Récurrence', required: false },
       { key: 'estimatedHours', label: 'Heures estimées', required: false },
@@ -10599,7 +10599,7 @@ function loadDarkModePreference() {
 
 function exportTasks(format) {
   if (format === 'csv') {
-    var csv = 'Titre,Description,Statut,Priorité,Catégorie,Assigné,Date début,Échéance\n';
+    var csv = 'Titre,Description,Statut,Priorité,Produit,Assigné,Date début,Échéance\n';
     for (var i = 0; i < tasks.length; i++) {
       var t = tasks[i];
       csv += '"' + (t.Title || '').replace(/"/g, '""') + '",';

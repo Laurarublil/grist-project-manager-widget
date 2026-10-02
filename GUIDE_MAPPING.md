@@ -45,7 +45,7 @@ Si vous installez le widget pour la première fois, **aucune configuration n'est
 | **Groupe** | Nom du groupe | Non | Text |
 | **Date début** | Date de début | Non | Date |
 | **Échéance** | Date d'échéance | Non | Date |
-| **Catégorie** | Catégorie de la tâche | Non | Text |
+| **Produit** | Produit de la tâche | Non | Text |
 | **Tag** | Tag associé | Non | Text |
 
 ### Table des Utilisateurs (Users)
@@ -66,11 +66,11 @@ Si vous installez le widget pour la première fois, **aucune configuration n'est
 | **Couleur** | Couleur hex (#rrggbb) | Non | Text |
 | **Statut** | active / completed / archived | Non | Choice |
 
-### Table des Catégories (Categories)
+### Table des Produits (Products)
 
 | Champ Widget | Description | Requis | Type Grist recommandé |
 |--------------|-------------|--------|----------------------|
-| **Nom** | Nom de la catégorie | ✅ Oui | Text |
+| **Nom** | Nom du produit | ✅ Oui | Text |
 | **Couleur** | Couleur hex (#rrggbb) | Non | Text |
 | **Ordre** | Ordre d'affichage | Non | Int |
 
@@ -360,7 +360,7 @@ Si vous rencontrez des problèmes :
 ### Version 1.0 (Mars 2026)
 - ✅ Système de mapping initial
 - ✅ Interface graphique de configuration
-- ✅ Support des tables Tasks, Users, Projects, Categories, Tags
+- ✅ Support des tables Tasks, Users, Projects, Products, Tags
 - ✅ Détection automatique des colonnes
 - ✅ Sauvegarde dans PM_Config
 - ✅ Compatibilité avec tables existantes
