@@ -1,0 +1,42 @@
+name: Deploy dev (develop vers gh-pages/dev)
+
+on:
+  push:
+    branches: [develop]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: deploy-pages
+  cancel-in-progress: false
+
+jobs:
+  deploy-dev:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Recuperer develop
+        uses: actions/checkout@v4
+        with:
+          ref: develop
+
+      - name: Recuperer gh-pages
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: pages
+
+      - name: Synchroniser dev/
+        run: |
+          rm -rf pages/dev
+          mkdir -p pages/dev
+          cp index.html widget.js pages/dev/
+
+      - name: Pousser gh-pages
+        run: |
+          cd pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "deploy dev depuis develop" || echo "aucun changement a deployer"
+          git push origin gh-pages

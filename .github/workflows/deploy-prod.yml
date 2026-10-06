@@ -1,0 +1,41 @@
+name: Deploy prod (main vers gh-pages racine)
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: deploy-pages
+  cancel-in-progress: false
+
+jobs:
+  deploy-prod:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Recuperer main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Recuperer gh-pages
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: pages
+
+      - name: Synchroniser la racine (dev/ preserve)
+        run: |
+          find pages -mindepth 1 -maxdepth 1 ! -name .git ! -name dev -exec rm -rf {} +
+          cp index.html widget.js pages/
+
+      - name: Pousser gh-pages
+        run: |
+          cd pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "deploy prod depuis main" || echo "aucun changement a deployer"
+          git push origin gh-pages
