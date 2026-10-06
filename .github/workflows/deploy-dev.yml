@@ -1,4 +1,4 @@
-name: Deploy dev (develop vers gh-pages/dev)
+name: Deploy dev (develop vers main/dev)
 
 on:
   push:
@@ -8,7 +8,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: deploy-pages
+  group: deploy-dev
   cancel-in-progress: false
 
 jobs:
@@ -17,26 +17,24 @@ jobs:
     steps:
       - name: Recuperer develop
         uses: actions/checkout@v4
-        with:
-          ref: develop
 
-      - name: Recuperer gh-pages
+      - name: Recuperer main
         uses: actions/checkout@v4
         with:
-          ref: gh-pages
-          path: pages
+          ref: main
+          path: site
 
       - name: Synchroniser dev/
         run: |
-          rm -rf pages/dev
-          mkdir -p pages/dev
-          cp index.html widget.js pages/dev/
+          rm -rf site/dev
+          mkdir -p site/dev
+          cp index.html widget.js site/dev/
 
-      - name: Pousser gh-pages
+      - name: Pousser main
         run: |
-          cd pages
+          cd site
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
           git commit -m "deploy dev depuis develop" || echo "aucun changement a deployer"
-          git push origin gh-pages
+          git push origin HEAD:main
