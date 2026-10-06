@@ -6460,23 +6460,15 @@ function openEditTaskModal(taskId, preserveAssignees) {
       }
       if (stDueDateStr) html += '<span class="subtask-due-badge' + stDueClass + '">📅 ' + stDueDateStr + '</span>';
       if (st.Estimated_Hours) html += '<span class="subtask-assignee-badge">⏱ ' + st.Estimated_Hours + 'h</span>';
-      if (st.Recurrence && st.Recurrence !== 'none') {
-        var recSymbol = recurrenceSymbol(st.Recurrence);
-        html += '<span class="subtask-assignee-badge" title="' + t('recurrence') + '">'+  recSymbol + '</span>';
-      }
       html += '</span>';
-      if (st.Recurrence && st.Recurrence !== 'none') {
-        html += '<button class="subtask-dep-btn" onclick="generateSubtaskOccurrences(' + st.id + ', ' + task.id + ')" title="' + t('generateMonth') + '">📅+</button>';
-      }
       html += '<button class="subtask-edit-btn" onclick="startEditSubtask(' + st.id + ', ' + task.id + ')" title="' + t('editSubtask') + '">✏️</button>';
-      html += '<button class="subtask-dep-btn" onclick="openSubtaskDepModal(' + st.id + ', ' + task.id + ')" title="' + t('dependencies') + '">🔗</button>';
       html += '<button class="subtask-delete" onclick="deleteSubtask(' + st.id + ', ' + task.id + ')" title="' + t('delete') + '">✕</button>';
       html += '</div>';
       // Definition of Done : critères de complétion de la sous-tâche
       var dodList = getDoD(st);
-      html += '<div class="subtask-dod">';
       if (dodList.length > 0) {
         var dodDone = dodList.filter(function(d) { return d.done; }).length;
+        html += '<div class="subtask-dod">';
         html += '<div class="subtask-dod-label">' + t('definitionOfDone') + ' <span class="dod-count">' + dodDone + '/' + dodList.length + '</span></div>';
         html += '<div class="subtask-dod-list' + (dodDone === dodList.length ? ' dod-all-done' : '') + '">';
         dodList.forEach(function(d, di) {
@@ -6487,9 +6479,8 @@ function openEditTaskModal(taskId, preserveAssignees) {
           html += '</div>';
         });
         html += '</div>';
+        html += '</div>';
       }
-      html += '<button type="button" class="dod-add-btn" onclick="addDoD(' + st.id + ')">➕ ' + t('addCriterion') + '</button>';
-      html += '</div>';
       // Edit view (hidden by default)
       // Assignés multiples : liste de cases à cocher (comme les tâches, séparés par virgule)
       var stAssignees = (st.Assignee || '').split(',').map(function(a) { return a.trim(); }).filter(Boolean);
@@ -6559,20 +6550,8 @@ function openEditTaskModal(taskId, preserveAssignees) {
       html += '<input type="date" class="subtask-edit-date" id="st-due-' + st.id + '" value="' + stDueDateInput + '" title="' + (currentLang === 'fr' ? 'Échéance' : 'Due date') + '">';
       html += '<input type="number" class="st-hours-input" id="st-hours-' + st.id + '" value="' + (st.Estimated_Hours || '') + '" placeholder="' + (currentLang === 'fr' ? 'Heures' : 'Hours') + '" min="0" step="0.5">';
       html += '</div>';
-      // Recurrence
-      var stRecur = st.Recurrence || 'none';
-      html += '<div style="display:flex;align-items:center;gap:8px;margin-top:6px;">';
-      html += '<span style="font-size:11px;color:#64748b;">🔄 ' + (currentLang === 'fr' ? 'Récurrence' : 'Recurrence') + '</span>';
-      html += '<select id="st-recur-' + st.id + '" style="flex:1;font-size:12px;">';
-      html += '<option value="none"' + (stRecur === 'none' ? ' selected' : '') + '>' + t('recurrenceNone') + '</option>';
-      html += '<option value="daily"' + (stRecur === 'daily' ? ' selected' : '') + '>' + t('recurrenceDaily') + '</option>';
-      html += '<option value="weekly"' + (stRecur === 'weekly' ? ' selected' : '') + '>' + t('recurrenceWeekly') + '</option>';
-      html += '<option value="biweekly"' + (stRecur === 'biweekly' ? ' selected' : '') + '>' + t('recurrenceBiweekly') + '</option>';
-      html += '<option value="monthly"' + (stRecur === 'monthly' ? ' selected' : '') + '>' + t('recurrenceMonthly') + '</option>';
-      html += '<option value="quarterly"' + (stRecur === 'quarterly' ? ' selected' : '') + '>' + t('recurrenceQuarterly') + '</option>';
-      html += '<option value="yearly"' + (stRecur === 'yearly' ? ' selected' : '') + '>' + t('recurrenceYearly') + '</option>';
-      html += '</select>';
-      html += '</div>';
+      // Definition of Done : ajout de critère (remplace la récurrence)
+      html += '<button type="button" class="dod-add-btn" style="width:100%;" onclick="addDoD(' + st.id + ')">➕ ' + t('addCriterion') + '</button>';
       // Actions
       html += '<div class="st-form-actions">';
       html += '<button type="button" class="subtask-cancel-btn" onclick="cancelEditSubtask(' + st.id + ')">' + (currentLang === 'fr' ? 'Annuler' : 'Cancel') + '</button>';
@@ -7372,7 +7351,6 @@ async function saveEditSubtask(subtaskId, parentTaskId) {
   var startDateInput= document.getElementById('st-start-'    + subtaskId);
   var dueDateInput  = document.getElementById('st-due-'      + subtaskId);
   var hoursInput    = document.getElementById('st-hours-'    + subtaskId);
-  var recurSel      = document.getElementById('st-recur-'    + subtaskId);
   if (!titleInput) return;
   var newTitle = titleInput.value.trim();
   if (!newTitle) return;
@@ -7403,7 +7381,6 @@ async function saveEditSubtask(subtaskId, parentTaskId) {
     Priority: prioritySel ? prioritySel.value : 'medium',
     Assignee: newAssignee,
     Estimated_Hours: hoursInput && hoursInput.value ? parseFloat(hoursInput.value) : null,
-    Recurrence: recurSel ? recurSel.value : 'none',
     Type: typeEl ? typeEl.value : 'subtask'
   };
   if (newStartDate) fields.Start_Date = newStartDate;
