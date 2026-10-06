@@ -345,24 +345,8 @@ var i18n = {
     projectArchived: 'Archivé',
     editTemplate: 'Modifier le modèle',
     modalEditTemplate: 'Modifier le modèle de tâche',
-    templateUpdated: 'Modèle mis à jour !',
-    // Definition of Done (DoD) translations
-    definitionOfDone: 'Definition of Done',
-    addCriterion: 'Ajouter un critère',
-    newCriterion: 'Nouveau critère',
-    noDoDCriteria: 'Aucun critère DoD',
-    dodCriterionAdded: 'Critère DoD ajouté',
-    dodCriterionDeleted: 'Critère DoD supprimé',
-    dodCriterionUpdated: 'Critère DoD mis à jour',
-    dodProgress: 'Progression DoD',
-    totalDoD: 'Total critères DoD',
-    completedDoD: 'Critères DoD terminés',
-    subtasksWithDoD: 'Sous-tâches avec DoD',
-    subtasksAllDoDDone: 'Sous-tâches avec DoD complètes',
-    chartDoD: 'Definition of Done (DoD)',
-    remainingDoD: 'Restants',
-    subtaskTypeSubtask: '↳ Sous-tâche',
-    subtaskTypeMilestone: '◆ Jalon (1 date)'
+    templateUpdated: 'Modèle mis à jour !'
+  },
   en: {
     appTitle: 'Project Management',
     appSubtitle: 'Organize and track your tasks with the Kanban board or table view',
@@ -703,24 +687,7 @@ var i18n = {
     projectArchived: 'Archived',
     editTemplate: 'Edit template',
     modalEditTemplate: 'Edit task template',
-    templateUpdated: 'Template updated!',
-    // Definition of Done (DoD) translations
-    definitionOfDone: 'Definition of Done',
-    addCriterion: 'Add criterion',
-    newCriterion: 'New criterion',
-    noDoDCriteria: 'No DoD criteria',
-    dodCriterionAdded: 'DoD criterion added',
-    dodCriterionDeleted: 'DoD criterion deleted',
-    dodCriterionUpdated: 'DoD criterion updated',
-    dodProgress: 'DoD Progress',
-    totalDoD: 'Total DoD criteria',
-    completedDoD: 'Completed DoD criteria',
-    subtasksWithDoD: 'Subtasks with DoD',
-    subtasksAllDoDDone: 'Subtasks with DoD complete',
-    chartDoD: 'Definition of Done (DoD)',
-    remainingDoD: 'Remaining',
-    subtaskTypeSubtask: '↳ Subtask',
-    subtaskTypeMilestone: '◆ Milestone (1 date)'
+    templateUpdated: 'Template updated!'
   }
 };
 
@@ -2369,21 +2336,6 @@ async function loadAllData() {
     subtasks = [];
     if (subtaskData && subtaskData.id) {
       for (var i = 0; i < subtaskData.id.length; i++) {
-        var dodValue = subtaskData.DefinitionOfDone ? subtaskData.DefinitionOfDone[i] : null;
-        var dodList = [];
-        if (dodValue) {
-          try {
-            if (typeof dodValue === 'string') {
-              dodList = JSON.parse(dodValue);
-            } else {
-              dodList = dodValue || [];
-            }
-          } catch (e) {
-            console.warn('Error parsing DefinitionOfDone for subtask:', e);
-            dodList = [];
-          }
-        }
-        
         subtasks.push({
           id: subtaskData.id[i],
           Parent_Task_Id: subtaskData.Parent_Task_Id ? subtaskData.Parent_Task_Id[i] : null,
@@ -2400,8 +2352,7 @@ async function loadAllData() {
           Estimated_Hours: subtaskData.Estimated_Hours ? subtaskData.Estimated_Hours[i] : null,
           Recurrence: subtaskData.Recurrence ? subtaskData.Recurrence[i] : 'none',
           Type: subtaskData.Type ? subtaskData.Type[i] : 'subtask',
-          Created_At: subtaskData.Created_At ? subtaskData.Created_At[i] : null,
-          DefinitionOfDone: dodList
+          Created_At: subtaskData.Created_At ? subtaskData.Created_At[i] : null
         });
       }
     }
@@ -3760,7 +3711,7 @@ function renderCalendarDayView() {
         taskSubtasks.forEach(function(st) {
           html += '<div class="day-subtask-item">';
           html += '<input type="checkbox" ' + (st.Completed ? 'checked' : '') + ' onclick="event.stopPropagation();toggleSubtask(' + st.id + ', ' + !st.Completed + ')" />';
-          html += '<span class="' + (st.Completed ? 'st-done' : '') + '">' + sanitize(st.Title) + '</span>' + renderDoDBadge(st);
+          html += '<span class="' + (st.Completed ? 'st-done' : '') + '">' + sanitize(st.Title) + '</span>';
           if (st.Assignee) html += '<span class="day-st-assignee">👤 ' + sanitize(st.Assignee) + '</span>';
           html += '</div>';
         });
@@ -4369,7 +4320,7 @@ function renderTableView() {
       var stOverdue = st.Due_Date && !st.Completed && st.Due_Date < _nowSec;
       // Colonne Tâche (titre)
       var stMilestoneMark = (st.Type === 'milestone') ? '<span title="Jalon" style="color:#7c3aed;margin-right:3px;">◆</span>' : '';
-      html += '<td><div class="subtask-indent"><span class="subtask-arrow">└</span><input type="checkbox" class="subtask-checkbox" ' + (st.Completed ? 'checked' : '') + ' onclick="event.stopPropagation();toggleSubtask(' + st.id + ', ' + !st.Completed + ')" style="cursor:pointer;width:14px;height:14px;margin-right:6px;flex-shrink:0;" />' + stMilestoneMark + '<span class="subtask-name' + (st.Completed ? ' completed' : '') + '">' + sanitize(st.Title) + '</span>' + renderDoDBadge(st) + '</div></td>';
+      html += '<td><div class="subtask-indent"><span class="subtask-arrow">└</span><input type="checkbox" class="subtask-checkbox" ' + (st.Completed ? 'checked' : '') + ' onclick="event.stopPropagation();toggleSubtask(' + st.id + ', ' + !st.Completed + ')" style="cursor:pointer;width:14px;height:14px;margin-right:6px;flex-shrink:0;" />' + stMilestoneMark + '<span class="subtask-name' + (st.Completed ? ' completed' : '') + '">' + sanitize(st.Title) + '</span></div></td>';
       // Projet (vide : hérité du parent)
       html += '<td></td>';
       // Statut (couleur réelle du statut personnalisé)
@@ -4529,13 +4480,6 @@ function renderGanttSubtaskLabelCell(st, parentTaskId) {
   }
   if (st.Due_Date) html += '<span style="font-size:9px;color:#94a3b8;margin-left:6px;">📅 ' + formatDate(st.Due_Date) + '</span>';
   if (st.Assignee) html += '<span style="font-size:9px;color:#94a3b8;margin-left:4px;">👤 ' + sanitize(st.Assignee).split(',')[0].trim().substring(0, 10) + '</span>';
-  // Add DoD badge if there are any DoD criteria
-  var dodList = ensureDoD(st);
-  if (dodList.length > 0) {
-    var completedDoD = dodList.filter(function(d) { return d.done; }).length;
-    var allDone = completedDoD === dodList.length;
-    html += '<span class="dod-badge' + (allDone ? ' all-done' : '') + '" style="font-size:9px;margin-left:4px;" title="' + t('definitionOfDone') + ': ' + completedDoD + '/' + dodList.length + '">📋 ' + completedDoD + '/' + dodList.length + '</span>';
-  }
   html += '</td>';
   return html;
 }
@@ -6484,16 +6428,7 @@ function openEditTaskModal(taskId, preserveAssignees) {
       html += '<button class="subtask-edit-btn" onclick="startEditSubtask(' + st.id + ', ' + task.id + ')" title="' + t('editSubtask') + '">✏️</button>';
       html += '<button class="subtask-dep-btn" onclick="openSubtaskDepModal(' + st.id + ', ' + task.id + ')" title="' + t('dependencies') + '">🔗</button>';
       html += '<button class="subtask-delete" onclick="deleteSubtask(' + st.id + ', ' + task.id + ')" title="' + t('delete') + '">✕</button>';
-      // Add DoD badge if there are any DoD criteria
-      var dodList = ensureDoD(st);
-      if (dodList.length > 0) {
-        var completedDoD = dodList.filter(function(d) { return d.done; }).length;
-        var allDone = completedDoD === dodList.length;
-        html += '<span class="dod-badge' + (allDone ? ' all-done' : '') + '" title="' + t('definitionOfDone') + ': ' + completedDoD + '/' + dodList.length + '">📋 ' + completedDoD + '/' + dodList.length + '</span>';
-      }
       html += '</div>';
-      // DoD List Container for view mode
-      html += '<div class="subtask-dod-container" id="st-dod-container-' + st.id + '"></div>';
       // Edit view (hidden by default)
       // Assignés multiples : liste de cases à cocher (comme les tâches, séparés par virgule)
       var stAssignees = (st.Assignee || '').split(',').map(function(a) { return a.trim(); }).filter(Boolean);
@@ -6521,8 +6456,8 @@ function openEditTaskModal(taskId, preserveAssignees) {
       var stType = st.Type || 'subtask';
       html += '<div><div class="st-pill-label">' + (currentLang === 'fr' ? 'Type' : 'Type') + '</div>';
       html += '<div class="st-pill-group">';
-      html += '<button type="button" class="st-pill' + (stType !== 'milestone' ? ' active-progress' : '') + '" onclick="setStType(' + st.id + ',\'subtask\',this)">' + t('subtaskTypeSubtask') + '</button>';
-      html += '<button type="button" class="st-pill' + (stType === 'milestone' ? ' active-progress' : '') + '" onclick="setStType(' + st.id + ',\'milestone\',this)">' + t('subtaskTypeMilestone') + '</button>';
+      html += '<button type="button" class="st-pill' + (stType !== 'milestone' ? ' active-progress' : '') + '" onclick="setStType(' + st.id + ',\'subtask\',this)">' + (currentLang === 'fr' ? '↳ Sous-tâche' : '↳ Subtask') + '</button>';
+      html += '<button type="button" class="st-pill' + (stType === 'milestone' ? ' active-progress' : '') + '" onclick="setStType(' + st.id + ',\'milestone\',this)">' + (currentLang === 'fr' ? '◆ Jalon (1 date)' : '◆ Milestone (1 date)') + '</button>';
       html += '</div>';
       html += '<input type="hidden" id="st-type-' + st.id + '" value="' + stType + '">';
       html += '</div>';
@@ -6577,10 +6512,6 @@ function openEditTaskModal(taskId, preserveAssignees) {
       html += '<option value="yearly"' + (stRecur === 'yearly' ? ' selected' : '') + '>' + t('recurrenceYearly') + '</option>';
       html += '</select>';
       html += '</div>';
-      // DoD Section in edit form
-      var dodList = ensureDoD(st);
-      html += '<input type="hidden" id="st-dod-' + st.id + '" value="' + sanitize(JSON.stringify(dodList)) + '">';
-      
       // Actions
       html += '<div class="st-form-actions">';
       html += '<button type="button" class="subtask-cancel-btn" onclick="cancelEditSubtask(' + st.id + ')">' + (currentLang === 'fr' ? 'Annuler' : 'Cancel') + '</button>';
@@ -6874,8 +6805,6 @@ function openEditTaskModal(taskId, preserveAssignees) {
   document.getElementById('modal-container').innerHTML = html;
   // D2 : remplir la liste des pièces jointes (token asynchrone à part)
   renderAttachmentsSection(task.id);
-  // Render DoD containers for all subtasks
-  renderAllDoDInModal(task.id);
 }
 
 // Suffixe de conteneur DOM pour un rôle RACI. editAssignees -> 'assignee' (et non
@@ -7272,16 +7201,6 @@ async function saveEditSubtask(subtaskId, parentTaskId) {
   var newDueDate = dueDateInput && dueDateInput.value ? Math.floor(new Date(dueDateInput.value).getTime() / 1000) : null;
   var newStatus = statusSel ? statusSel.value : 'todo';
   var typeEl = document.getElementById('st-type-' + subtaskId);
-  var dodInput = document.getElementById('st-dod-' + subtaskId);
-  var dodList = [];
-  if (dodInput && dodInput.value) {
-    try {
-      dodList = JSON.parse(dodInput.value);
-    } catch (e) {
-      console.error('Error parsing DoD:', e);
-    }
-  }
-  
   var fields = {
     Title: newTitle,
     Description: descInput ? descInput.value : '',
@@ -7291,8 +7210,7 @@ async function saveEditSubtask(subtaskId, parentTaskId) {
     Assignee: newAssignee,
     Estimated_Hours: hoursInput && hoursInput.value ? parseFloat(hoursInput.value) : null,
     Recurrence: recurSel ? recurSel.value : 'none',
-    Type: typeEl ? typeEl.value : 'subtask',
-    DefinitionOfDone: dodList.length > 0 ? JSON.stringify(dodList) : null
+    Type: typeEl ? typeEl.value : 'subtask'
   };
   if (newStartDate) fields.Start_Date = newStartDate;
   if (newDueDate) fields.Due_Date = newDueDate;
@@ -7314,360 +7232,6 @@ async function saveEditSubtask(subtaskId, parentTaskId) {
     console.error('Error saving subtask:', e);
     showToast('Error: ' + e.message, 'error');
   }
-}
-
-// =============================================================================
-// DEFINITION OF DONE (DoD) FUNCTIONS
-// =============================================================================
-
-// Render all DoD containers in the modal after HTML is inserted
-function renderAllDoDInModal(taskId) {
-  var taskSubtasks = getTaskSubtasks(taskId);
-  taskSubtasks.forEach(function(st) {
-    var container = document.getElementById('st-dod-container-' + st.id);
-    if (container) {
-      container.innerHTML = '';
-      renderDoDForSubtask(st, container);
-    }
-  });
-}
-
-// Initialize DefinitionOfDone for a subtask if it doesn't exist
-function ensureDoD(subtask) {
-  if (!subtask.DefinitionOfDone) {
-    subtask.DefinitionOfDone = [];
-  }
-  return subtask.DefinitionOfDone;
-}
-
-// Get DoD list for a subtask
-function getSubtaskDoD(subtaskId) {
-  var subtask = subtasks.find(function(st) { return st.id === subtaskId; });
-  if (!subtask) return [];
-  return ensureDoD(subtask);
-}
-
-// Add a new DoD criterion to a subtask
-async function addDoD(subtaskId, text) {
-  var subtask = subtasks.find(function(st) { return st.id === subtaskId; });
-  if (!subtask) return;
-  
-  var dodList = ensureDoD(subtask);
-  var newDoD = {
-    id: 'dod_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
-    text: text || t('newCriterion'),
-    done: false
-  };
-  
-  dodList.push(newDoD);
-  
-  try {
-    await grist.docApi.applyUserActions([
-      ['UpdateRecord', SUBTASKS_TABLE, subtaskId, { DefinitionOfDone: JSON.stringify(dodList) }]
-    ]);
-    showToast(t('dodCriterionAdded'), 'success');
-    await loadAllData();
-  } catch (e) {
-    console.error('Error adding DoD:', e);
-    showToast('Error: ' + e.message, 'error');
-  }
-}
-
-// Delete a DoD criterion from a subtask
-async function deleteDoD(subtaskId, dodId) {
-  var subtask = subtasks.find(function(st) { return st.id === subtaskId; });
-  if (!subtask) return;
-  
-  var dodList = ensureDoD(subtask);
-  var updatedList = dodList.filter(function(d) { return d.id !== dodId; });
-  
-  try {
-    await grist.docApi.applyUserActions([
-      ['UpdateRecord', SUBTASKS_TABLE, subtaskId, { DefinitionOfDone: updatedList.length > 0 ? JSON.stringify(updatedList) : null }]
-    ]);
-    showToast(t('dodCriterionDeleted'), 'success');
-    await loadAllData();
-  } catch (e) {
-    console.error('Error deleting DoD:', e);
-    showToast('Error: ' + e.message, 'error');
-  }
-}
-
-// Toggle DoD criterion completion
-async function toggleDoD(subtaskId, dodId, completed) {
-  var subtask = subtasks.find(function(st) { return st.id === subtaskId; });
-  if (!subtask) return;
-  
-  var dodList = ensureDoD(subtask);
-  var dod = dodList.find(function(d) { return d.id === dodId; });
-  if (!dod) return;
-  
-  dod.done = completed;
-  
-  // Check if all DoDs are done
-  var allDone = dodList.every(function(d) { return d.done; });
-  var noneDone = dodList.length === 0 || dodList.every(function(d) { return !d.done; });
-  
-  // If all DoDs are done, mark subtask as completed
-  // If at least one DoD is not done, ensure subtask is not marked as completed
-  var newStatus = subtask.Status;
-  var newCompleted = subtask.Completed;
-  
-  if (allDone && dodList.length > 0 && subtask.Status !== 'done') {
-    newStatus = 'done';
-    newCompleted = true;
-  } else if (!allDone && subtask.Status === 'done' && subtask.Completed) {
-    newStatus = 'progress';
-    newCompleted = false;
-  }
-  
-  try {
-    var updateFields = { DefinitionOfDone: JSON.stringify(dodList) };
-    if (newStatus !== subtask.Status || newCompleted !== subtask.Completed) {
-      updateFields.Status = newStatus;
-      updateFields.Completed = newCompleted;
-    }
-    
-    await grist.docApi.applyUserActions([
-      ['UpdateRecord', SUBTASKS_TABLE, subtaskId, updateFields]
-    ]);
-    showToast(t('dodCriterionUpdated'), 'success');
-    await loadAllData();
-  } catch (e) {
-    console.error('Error toggling DoD:', e);
-    showToast('Error: ' + e.message, 'error');
-  }
-}
-
-// Update DoD criterion text
-async function updateDoDText(subtaskId, dodId, newText) {
-  var subtask = subtasks.find(function(st) { return st.id === subtaskId; });
-  if (!subtask) return;
-  
-  var dodList = ensureDoD(subtask);
-  var dod = dodList.find(function(d) { return d.id === dodId; });
-  if (!dod) return;
-  
-  dod.text = newText;
-  
-  try {
-    await grist.docApi.applyUserActions([
-      ['UpdateRecord', SUBTASKS_TABLE, subtaskId, { DefinitionOfDone: JSON.stringify(dodList) }]
-    ]);
-    showToast(currentLang === 'fr' ? 'Texte du critère mis à jour' : 'Criterion text updated', 'success');
-  } catch (e) {
-    console.error('Error updating DoD text:', e);
-    showToast('Error: ' + e.message, 'error');
-  }
-}
-
-// Update DoD criterion text from contenteditable span
-function updateDoDTextFromSpan(span, subtaskId, dodId) {
-  var newText = span.textContent.trim();
-  if (!newText) {
-    span.textContent = t('newCriterion');
-    newText = span.textContent;
-  }
-  updateDoDText(subtaskId, dodId, newText);
-}
-
-// Get DoD progress for a subtask (percentage)
-function getSubtaskDoDProgress(subtaskId) {
-  var dodList = getSubtaskDoD(subtaskId);
-  if (dodList.length === 0) return 0;
-  var completed = dodList.filter(function(d) { return d.done; }).length;
-  return Math.round((completed / dodList.length) * 100);
-}
-
-// Get DoD stats for all subtasks
-function getAllDoDStats() {
-  var totalDoD = 0;
-  var completedDoD = 0;
-  var subtasksWithDoD = 0;
-  var subtasksAllDoDDone = 0;
-  
-  if (!subtasks) return { totalDoD: 0, completedDoD: 0, subtasksWithDoD: 0, subtasksAllDoDDone: 0, progress: 0 };
-  
-  subtasks.forEach(function(st) {
-    var dodList = ensureDoD(st);
-    if (dodList.length > 0) {
-      subtasksWithDoD++;
-      totalDoD += dodList.length;
-      var completed = dodList.filter(function(d) { return d.done; }).length;
-      completedDoD += completed;
-      if (completed === dodList.length) {
-        subtasksAllDoDDone++;
-      }
-    }
-  });
-  
-  return {
-    totalDoD: totalDoD,
-    completedDoD: completedDoD,
-    subtasksWithDoD: subtasksWithDoD,
-    subtasksAllDoDDone: subtasksAllDoDDone,
-    progress: totalDoD > 0 ? Math.round((completedDoD / totalDoD) * 100) : 0
-  };
-}
-
-// Render DoD list for a subtask in view mode
-function renderDoDForSubtask(subtask, subtaskElement) {
-  var dodList = ensureDoD(subtask);
-  
-  if (dodList.length === 0) {
-    var dodListEl = document.createElement('div');
-    dodListEl.className = 'subtask-dod-list';
-    var addBtn = document.createElement('button');
-    addBtn.className = 'dod-add-btn';
-    addBtn.innerHTML = '➕ ' + t('addCriterion');
-    addBtn.onclick = function() { addDoD(subtask.id); };
-    dodListEl.appendChild(addBtn);
-    subtaskElement.appendChild(dodListEl);
-    return;
-  }
-  
-  var allDone = dodList.every(function(d) { return d.done; });
-  var dodListEl = document.createElement('div');
-  dodListEl.className = 'subtask-dod-list' + (allDone ? ' dod-all-done' : '');
-  
-  dodList.forEach(function(dod) {
-    var dodItem = document.createElement('div');
-    dodItem.className = 'dod-item';
-    
-    var checkbox = document.createElement('input');
-    checkbox.type = 'checkbox';
-    checkbox.className = 'dod-checkbox';
-    checkbox.checked = dod.done || false;
-    checkbox.onchange = function() { toggleDoD(subtask.id, dod.id, this.checked); };
-    dodItem.appendChild(checkbox);
-    
-    var textSpan = document.createElement('span');
-    textSpan.className = 'dod-text';
-    textSpan.textContent = dod.text || t('newCriterion');
-    textSpan.contentEditable = true;
-    textSpan.onblur = function() { updateDoDTextFromSpan(this, subtask.id, dod.id); };
-    dodItem.appendChild(textSpan);
-    
-    var deleteBtn = document.createElement('button');
-    deleteBtn.className = 'dod-delete';
-    deleteBtn.innerHTML = '✕';
-    deleteBtn.onclick = function() { deleteDoD(subtask.id, dod.id); };
-    dodItem.appendChild(deleteBtn);
-    
-    dodListEl.appendChild(dodItem);
-  });
-  
-  var addBtn = document.createElement('button');
-  addBtn.className = 'dod-add-btn';
-  addBtn.innerHTML = '➕ ' + t('addCriterion');
-  addBtn.onclick = function() { addDoD(subtask.id); };
-  dodListEl.appendChild(addBtn);
-  
-  subtaskElement.appendChild(dodListEl);
-}
-
-// Render DoD list for a subtask in edit mode
-function renderDoDForSubtaskEdit(subtask, container) {
-  var dodList = ensureDoD(subtask);
-  
-  var dodSection = document.createElement('div');
-  dodSection.className = 'dod-edit-section';
-  
-  var label = document.createElement('div');
-  label.className = 'dod-edit-label';
-  label.textContent = t('definitionOfDone');
-  dodSection.appendChild(label);
-  
-  var editList = document.createElement('div');
-  editList.className = 'edit-dod-list';
-  editList.id = 'edit-dod-list-' + subtask.id;
-  
-  if (dodList.length === 0) {
-    var emptyText = document.createElement('div');
-    emptyText.style.fontSize = '12px';
-    emptyText.style.color = '#94a3b8';
-    emptyText.style.textAlign = 'center';
-    emptyText.style.padding = '8px';
-    emptyText.textContent = t('noDoDCriteria');
-    editList.appendChild(emptyText);
-  } else {
-    dodList.forEach(function(dod, index) {
-      var dodItem = document.createElement('div');
-      dodItem.className = 'edit-dod-item';
-      
-      var checkbox = document.createElement('input');
-      checkbox.type = 'checkbox';
-      checkbox.className = 'dod-checkbox';
-      checkbox.checked = dod.done || false;
-      checkbox.onchange = function() { 
-        var updatedList = ensureDoD(subtask);
-        if (updatedList[index]) {
-          updatedList[index].done = this.checked;
-          document.getElementById('st-dod-' + subtask.id).value = JSON.stringify(updatedList);
-        }
-      };
-      dodItem.appendChild(checkbox);
-      
-      var textInput = document.createElement('input');
-      textInput.type = 'text';
-      textInput.className = 'edit-dod-text';
-      textInput.value = dod.text || '';
-      textInput.onchange = function() {
-        var updatedList = ensureDoD(subtask);
-        if (updatedList[index]) {
-          updatedList[index].text = this.value;
-          document.getElementById('st-dod-' + subtask.id).value = JSON.stringify(updatedList);
-        }
-      };
-      dodItem.appendChild(textInput);
-      
-      var deleteBtn = document.createElement('button');
-      deleteBtn.className = 'dod-delete';
-      deleteBtn.innerHTML = '✕';
-      deleteBtn.onclick = function() {
-        var updatedList = ensureDoD(subtask);
-        updatedList.splice(index, 1);
-        document.getElementById('st-dod-' + subtask.id).value = JSON.stringify(updatedList);
-        renderDoDForSubtaskEdit(subtask, container);
-      };
-      dodItem.appendChild(deleteBtn);
-      
-      editList.appendChild(dodItem);
-    });
-  }
-  
-  dodSection.appendChild(editList);
-  
-  var addBtn = document.createElement('button');
-  addBtn.className = 'dod-add-btn';
-  addBtn.innerHTML = '➕ ' + t('addCriterion');
-  addBtn.onclick = function() {
-    var updatedList = ensureDoD(subtask);
-    var newDoD = {
-      id: 'dod_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
-      text: t('newCriterion'),
-      done: false
-    };
-    updatedList.push(newDoD);
-    document.getElementById('st-dod-' + subtask.id).value = JSON.stringify(updatedList);
-    renderDoDForSubtaskEdit(subtask, container);
-  };
-  dodSection.appendChild(addBtn);
-  
-  container.appendChild(dodSection);
-}
-
-// Render DoD badge for table view
-function renderDoDBadge(subtask) {
-  var dodList = ensureDoD(subtask);
-  if (dodList.length === 0) return '';
-  
-  var completed = dodList.filter(function(d) { return d.done; }).length;
-  var allDone = completed === dodList.length;
-  var badgeClass = 'dod-badge' + (allDone ? ' all-done' : '');
-  var badgeText = '📋 ' + completed + '/' + dodList.length;
-  
-  return '<span class="' + badgeClass + '" title="' + (currentLang === 'fr' ? 'Definition of Done' : 'Definition of Done') + '">' + badgeText + '</span>';
 }
 
 async function generateSubtaskOccurrences(subtaskId, parentTaskId) {
@@ -8769,29 +8333,6 @@ function renderStatsView() {
   });
   document.getElementById('chart-week').innerHTML = weekHtml;
 
-  // DoD chart - calculate once and reuse in summary
-  var dodStats = getAllDoDStats();
-  var dodHtml = '';
-  if (dodStats.totalDoD > 0) {
-    var categories = [
-      { key: 'completed', value: dodStats.completedDoD, color: '#22c55e', label: t('completedDoD') },
-      { key: 'remaining', value: dodStats.totalDoD - dodStats.completedDoD, color: '#ef4444', label: t('remainingDoD') }
-    ];
-    var maxDoD = Math.max(dodStats.completedDoD, dodStats.totalDoD - dodStats.completedDoD, 1);
-    
-    categories.forEach(function(cat) {
-      var height = (cat.value / maxDoD) * 160;
-      dodHtml += '<div class="chart-bar">';
-      dodHtml += '<span class="chart-bar-value">' + cat.value + '</span>';
-      dodHtml += '<div class="chart-bar-fill" style="height:' + height + 'px;background:' + cat.color + '"></div>';
-      dodHtml += '<span class="chart-bar-label">' + cat.label + '</span>';
-      dodHtml += '</div>';
-    });
-  } else {
-    dodHtml = '<div style="text-align:center;color:#94a3b8;width:100%;">' + t('noDoDCriteria') + '</div>';
-  }
-  document.getElementById('chart-dod').innerHTML = dodHtml;
-
   // Summary stats
   var completionRate = filteredTasks.length > 0 ? Math.round((statusCounts.done / filteredTasks.length) * 100) : 0;
   document.getElementById('stats-completion-rate').textContent = completionRate + '%';
@@ -8810,10 +8351,6 @@ function renderStatsView() {
   var avgMinutes = filteredTasks.length > 0 ? Math.round(totalMinutes / filteredTasks.length) : 0;
   var avgHours = Math.round(avgMinutes / 60 * 10) / 10;
   document.getElementById('stats-avg-time').textContent = avgHours + 'h';
-
-  // DoD statistics (already calculated above)
-  document.getElementById('stats-dod-progress').textContent = dodStats.progress + '%';
-  document.getElementById('stats-total-dod').textContent = dodStats.totalDoD;
 
   // Workload chart - Risk of overload per user
   renderWorkloadChart();
