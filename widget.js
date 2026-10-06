@@ -228,6 +228,13 @@ var i18n = {
     subtaskSaved: 'Sous-tâche modifiée',
     editSubtask: 'Modifier la sous-tâche',
     subtaskAssignee: 'Responsable',
+    definitionOfDone: 'Definition of Done',
+    addCriterion: 'Ajouter un critère',
+    newCriterion: 'Nouveau critère',
+    dodCriterionAdded: 'Critère DoD ajouté',
+    dodCriterionDeleted: 'Critère DoD supprimé',
+    dodCriterionUpdated: 'Critère DoD mis à jour',
+    dodIncomplete: 'DoD incomplet : cochez tous les critères pour terminer la sous-tâche',
     subtaskDueDate: 'Échéance',
     noAssignee: 'Non assigné',
     dependencies: 'Dépendances',
@@ -570,6 +577,13 @@ var i18n = {
     subtaskSaved: 'Subtask updated',
     editSubtask: 'Edit subtask',
     subtaskAssignee: 'Assignee',
+    definitionOfDone: 'Definition of Done',
+    addCriterion: 'Add criterion',
+    newCriterion: 'New criterion',
+    dodCriterionAdded: 'DoD criterion added',
+    dodCriterionDeleted: 'DoD criterion deleted',
+    dodCriterionUpdated: 'DoD criterion updated',
+    dodIncomplete: 'Incomplete DoD: check all criteria to complete the subtask',
     subtaskDueDate: 'Due date',
     noAssignee: 'Unassigned',
     dependencies: 'Dependencies',
@@ -2172,6 +2186,10 @@ async function ensureTables() {
         if (stCols.indexOf('Type') === -1) {
           stActions.push(['AddColumn', SUBTASKS_TABLE, 'Type', { type: 'Choice', widgetOptions: JSON.stringify({ choices: ['subtask', 'milestone'] }) }]);
         }
+        // Definition of Done : critères de complétion (JSON [{ text, done }])
+        if (stCols.indexOf('DefinitionOfDone') === -1) {
+          stActions.push(['AddColumn', SUBTASKS_TABLE, 'DefinitionOfDone', { type: 'Text' }]);
+        }
         if (stActions.length > 0) {
           await grist.docApi.applyUserActions(stActions);
         }
@@ -2336,6 +2354,17 @@ async function loadAllData() {
     subtasks = [];
     if (subtaskData && subtaskData.id) {
       for (var i = 0; i < subtaskData.id.length; i++) {
+        // Definition of Done : JSON [{ text, done }], parsing tolérant
+        var dodRaw = subtaskData.DefinitionOfDone ? subtaskData.DefinitionOfDone[i] : null;
+        var dodList = [];
+        if (dodRaw) {
+          try {
+            var dodParsed = typeof dodRaw === 'string' ? JSON.parse(dodRaw) : dodRaw;
+            if (Array.isArray(dodParsed)) dodList = dodParsed;
+          } catch (e) {
+            console.warn('Invalid DefinitionOfDone for subtask ' + subtaskData.id[i], e);
+          }
+        }
         subtasks.push({
           id: subtaskData.id[i],
           Parent_Task_Id: subtaskData.Parent_Task_Id ? subtaskData.Parent_Task_Id[i] : null,
@@ -2352,7 +2381,8 @@ async function loadAllData() {
           Estimated_Hours: subtaskData.Estimated_Hours ? subtaskData.Estimated_Hours[i] : null,
           Recurrence: subtaskData.Recurrence ? subtaskData.Recurrence[i] : 'none',
           Type: subtaskData.Type ? subtaskData.Type[i] : 'subtask',
-          Created_At: subtaskData.Created_At ? subtaskData.Created_At[i] : null
+          Created_At: subtaskData.Created_At ? subtaskData.Created_At[i] : null,
+          DefinitionOfDone: dodList
         });
       }
     }
@@ -3710,7 +3740,7 @@ function renderCalendarDayView() {
         html += '<div class="day-subtasks">';
         taskSubtasks.forEach(function(st) {
           html += '<div class="day-subtask-item">';
-          html += '<input type="checkbox" ' + (st.Completed ? 'checked' : '') + ' onclick="event.stopPropagation();toggleSubtask(' + st.id + ', ' + !st.Completed + ')" />';
+          html += '<input type="checkbox" ' + (st.Completed ? 'checked' : '') + ' onclick="event.stopPropagation();toggleSubtask(' + st.id + ', ' + !st.Completed + ', this)" />';
           html += '<span class="' + (st.Completed ? 'st-done' : '') + '">' + sanitize(st.Title) + '</span>';
           if (st.Assignee) html += '<span class="day-st-assignee">👤 ' + sanitize(st.Assignee) + '</span>';
           html += '</div>';
@@ -3794,13 +3824,26 @@ function toggleCardExpand(taskId, ev) {
 }
 
 // Cocher/décocher une sous-tâche depuis le panneau déplié d'une tuile
-async function toggleSubtaskFromCard(subtaskId, completed) {
+async function toggleSubtaskFromCard(subtaskId, completed, el) {
+  var subtask = subtasks.find(function(st) { return st.id === subtaskId; });
+  // Definition of Done : complétion manuelle bloquée tant que des critères restent décochés
+  if (subtask && getDoD(subtask).length > 0 && completed && !isDoDFulfilled(subtask)) {
+    showToast(t('dodIncomplete'), 'warning');
+    if (el) el.checked = false;
+    return;
+  }
   try {
+    var fields = { Completed: completed };
+    var clearedDoD = null;
+    if (subtask && !completed && getDoD(subtask).length > 0) {
+      clearedDoD = copyDoD(subtask).map(function(d) { d.done = false; return d; });
+      fields.DefinitionOfDone = JSON.stringify(clearedDoD);
+    }
     await grist.docApi.applyUserActions([
-      ['UpdateRecord', SUBTASKS_TABLE, subtaskId, { Completed: completed }]
+      ['UpdateRecord', SUBTASKS_TABLE, subtaskId, fields]
     ]);
     for (var i = 0; i < subtasks.length; i++) {
-      if (subtasks[i].id === subtaskId) { subtasks[i].Completed = completed; break; }
+      if (subtasks[i].id === subtaskId) { subtasks[i].Completed = completed; if (clearedDoD) subtasks[i].DefinitionOfDone = clearedDoD; break; }
     }
     renderKanbanView();
   } catch (e) {
@@ -4034,7 +4077,7 @@ function renderTaskCard(task) {
     if (taskSubtasks.length > 0) {
       html += '<div class="tcd-section"><div class="tcd-label">' + (_fr ? 'Sous-tâches' : 'Subtasks') + ' (' + completedCount + '/' + taskSubtasks.length + ')</div>';
       taskSubtasks.forEach(function(st) {
-        html += '<label class="tcd-subtask"><input type="checkbox" ' + (st.Completed ? 'checked' : '') + ' onclick="event.stopPropagation();toggleSubtaskFromCard(' + st.id + ', this.checked)">';
+        html += '<label class="tcd-subtask"><input type="checkbox" ' + (st.Completed ? 'checked' : '') + ' onclick="event.stopPropagation();toggleSubtaskFromCard(' + st.id + ', this.checked, this)">';
         html += '<span' + (st.Completed ? ' style="text-decoration:line-through;color:#94a3b8;"' : '') + '>' + sanitize(st.Title) + '</span>';
         if (st.Due_Date) html += '<span class="tcd-st-date">📅 ' + formatDate(st.Due_Date) + '</span>';
         html += '</label>';
@@ -4320,7 +4363,7 @@ function renderTableView() {
       var stOverdue = st.Due_Date && !st.Completed && st.Due_Date < _nowSec;
       // Colonne Tâche (titre)
       var stMilestoneMark = (st.Type === 'milestone') ? '<span title="Jalon" style="color:#7c3aed;margin-right:3px;">◆</span>' : '';
-      html += '<td><div class="subtask-indent"><span class="subtask-arrow">└</span><input type="checkbox" class="subtask-checkbox" ' + (st.Completed ? 'checked' : '') + ' onclick="event.stopPropagation();toggleSubtask(' + st.id + ', ' + !st.Completed + ')" style="cursor:pointer;width:14px;height:14px;margin-right:6px;flex-shrink:0;" />' + stMilestoneMark + '<span class="subtask-name' + (st.Completed ? ' completed' : '') + '">' + sanitize(st.Title) + '</span></div></td>';
+      html += '<td><div class="subtask-indent"><span class="subtask-arrow">└</span><input type="checkbox" class="subtask-checkbox" ' + (st.Completed ? 'checked' : '') + ' onclick="event.stopPropagation();toggleSubtask(' + st.id + ', ' + !st.Completed + ', this)" style="cursor:pointer;width:14px;height:14px;margin-right:6px;flex-shrink:0;" />' + stMilestoneMark + '<span class="subtask-name' + (st.Completed ? ' completed' : '') + '">' + sanitize(st.Title) + '</span></div></td>';
       // Projet (vide : hérité du parent)
       html += '<td></td>';
       // Statut (couleur réelle du statut personnalisé)
@@ -6395,7 +6438,7 @@ function openEditTaskModal(taskId, preserveAssignees) {
       html += '<div class="subtask-item' + (st.Completed ? ' completed' : '') + (stBlocked ? ' blocked' : '') + '" data-id="' + st.id + '" id="st-row-' + st.id + '">';
       // Normal view
       html += '<div class="subtask-view" id="st-view-' + st.id + '">';
-      html += '<input type="checkbox" class="subtask-checkbox" ' + (st.Completed ? 'checked' : '') + (stBlocked ? ' disabled' : '') + ' onchange="toggleSubtask(' + st.id + ', this.checked)" />';
+      html += '<input type="checkbox" class="subtask-checkbox" ' + (st.Completed ? 'checked' : '') + (stBlocked ? ' disabled' : '') + ' onchange="toggleSubtask(' + st.id + ', this.checked, this)" />';
       html += '<span class="subtask-title">' + sanitize(st.Title) + '</span>';
       if (stBlocked && stBlocker) {
         html += '<span class="subtask-blocked-badge" title="' + t('blockedBy') + ' ' + sanitize(stBlocker.Title) + '">🔒</span>';
@@ -6428,6 +6471,24 @@ function openEditTaskModal(taskId, preserveAssignees) {
       html += '<button class="subtask-edit-btn" onclick="startEditSubtask(' + st.id + ', ' + task.id + ')" title="' + t('editSubtask') + '">✏️</button>';
       html += '<button class="subtask-dep-btn" onclick="openSubtaskDepModal(' + st.id + ', ' + task.id + ')" title="' + t('dependencies') + '">🔗</button>';
       html += '<button class="subtask-delete" onclick="deleteSubtask(' + st.id + ', ' + task.id + ')" title="' + t('delete') + '">✕</button>';
+      html += '</div>';
+      // Definition of Done : critères de complétion de la sous-tâche
+      var dodList = getDoD(st);
+      html += '<div class="subtask-dod">';
+      if (dodList.length > 0) {
+        var dodDone = dodList.filter(function(d) { return d.done; }).length;
+        html += '<div class="subtask-dod-label">' + t('definitionOfDone') + ' <span class="dod-count">' + dodDone + '/' + dodList.length + '</span></div>';
+        html += '<div class="subtask-dod-list' + (dodDone === dodList.length ? ' dod-all-done' : '') + '">';
+        dodList.forEach(function(d, di) {
+          html += '<div class="dod-item">';
+          html += '<input type="checkbox" class="dod-checkbox"' + (d.done ? ' checked' : '') + ' onchange="toggleDoD(' + st.id + ', ' + di + ', this.checked)" />';
+          html += '<input type="text" class="dod-text" value="' + sanitize(d.text || '') + '" onchange="renameDoD(' + st.id + ', ' + di + ', this)" />';
+          html += '<button type="button" class="dod-delete" onclick="deleteDoD(' + st.id + ', ' + di + ')" title="' + t('delete') + '">✕</button>';
+          html += '</div>';
+        });
+        html += '</div>';
+      }
+      html += '<button type="button" class="dod-add-btn" onclick="addDoD(' + st.id + ')">➕ ' + t('addCriterion') + '</button>';
       html += '</div>';
       // Edit view (hidden by default)
       // Assignés multiples : liste de cases à cocher (comme les tâches, séparés par virgule)
@@ -7059,23 +7120,36 @@ function restoreModalScrollTop(pos) {
   }, 50);
 }
 
-async function toggleSubtask(subtaskId, completed) {
+async function toggleSubtask(subtaskId, completed, el) {
   var savedAssignees = editAssignees.slice();
   var savedAccountable = editAccountable.slice();
   var savedConsulted = editConsulted.slice();
   var savedInformed = editInformed.slice();
   var scrollPos = getModalScrollTop();
   var _tgSt = subtasks.find(function(st){ return st.id === subtaskId; });
+  // Definition of Done : complétion manuelle bloquée tant que des critères restent décochés
+  if (_tgSt && getDoD(_tgSt).length > 0 && completed && !isDoDFulfilled(_tgSt)) {
+    showToast(t('dodIncomplete'), 'warning');
+    if (el) el.checked = false;
+    return;
+  }
   if (_tgSt) await persistTaskFormFields(_tgSt.Parent_Task_Id);   // préserve la saisie parent
   try {
     var newStatus = completed ? 'done' : 'todo';
+    var fields = { Completed: completed, Status: newStatus };
+    var clearedDoD = null;
+    if (_tgSt && !completed && getDoD(_tgSt).length > 0) {
+      clearedDoD = copyDoD(_tgSt).map(function(d) { d.done = false; return d; });
+      fields.DefinitionOfDone = JSON.stringify(clearedDoD);
+    }
     await grist.docApi.applyUserActions([
-      ['UpdateRecord', SUBTASKS_TABLE, subtaskId, { Completed: completed, Status: newStatus }]
+      ['UpdateRecord', SUBTASKS_TABLE, subtaskId, fields]
     ]);
     for (var i = 0; i < subtasks.length; i++) {
       if (subtasks[i].id === subtaskId) {
         subtasks[i].Completed = completed;
         subtasks[i].Status = newStatus;
+        if (clearedDoD) subtasks[i].DefinitionOfDone = clearedDoD;
         break;
       }
     }
@@ -7116,6 +7190,116 @@ async function deleteSubtask(subtaskId, parentTaskId) {
   } catch (e) {
     console.error('Error deleting subtask:', e);
   }
+}
+
+// =============================================================================
+// DEFINITION OF DONE (DoD) : critères de complétion d'une sous-tâche
+// Colonne DefinitionOfDone (JSON [{ text, done }]). La sous-tâche est considérée
+// terminée uniquement quand tous les critères sont cochés.
+// =============================================================================
+
+function getDoD(subtask) {
+  return (subtask && Array.isArray(subtask.DefinitionOfDone)) ? subtask.DefinitionOfDone : [];
+}
+
+function isDoDFulfilled(subtask) {
+  var list = getDoD(subtask);
+  return list.length > 0 && list.every(function(d) { return !!d.done; });
+}
+
+function copyDoD(subtask) {
+  return getDoD(subtask).map(function(d) {
+    return { text: d.text || '', done: !!d.done };
+  });
+}
+
+// Applique la nouvelle liste de critères et dérive Completed/Status :
+// - tous les critères cochés -> Completed true / Status 'done'
+// - au moins un critère décoché (ou liste vidée) sur une sous-tâche terminée
+//   -> Completed false / Status 'progress'
+async function applyDoDUpdate(subtask, dodList) {
+  var savedAssignees = editAssignees.slice();
+  var savedAccountable = editAccountable.slice();
+  var savedConsulted = editConsulted.slice();
+  var savedInformed = editInformed.slice();
+  var scrollPos = getModalScrollTop();
+  await persistTaskFormFields(subtask.Parent_Task_Id);   // préserve la saisie parent en cours
+  var allDone = dodList.length > 0 && dodList.every(function(d) { return d.done; });
+  var fields = { DefinitionOfDone: dodList.length > 0 ? JSON.stringify(dodList) : null };
+  var becameCompleted = false;
+  if (allDone && !subtask.Completed) {
+    fields.Completed = true;
+    fields.Status = 'done';
+    becameCompleted = true;
+  } else if (!allDone && subtask.Completed) {
+    fields.Completed = false;
+    fields.Status = 'progress';
+  }
+  try {
+    await grist.docApi.applyUserActions([
+      ['UpdateRecord', SUBTASKS_TABLE, subtask.id, fields]
+    ]);
+    subtask.DefinitionOfDone = dodList;
+    if (fields.Completed !== undefined) {
+      subtask.Completed = fields.Completed;
+      subtask.Status = fields.Status;
+    }
+    if (becameCompleted) showToast(t('subtaskCompleted'), 'success');
+    editAssignees = savedAssignees;
+    editAccountable = savedAccountable;
+    editConsulted = savedConsulted;
+    editInformed = savedInformed;
+    openEditTaskModal(subtask.Parent_Task_Id, true);
+    restoreModalScrollTop(scrollPos);
+  } catch (e) {
+    console.error('Error updating DoD:', e);
+    showToast('Error: ' + e.message, 'error');
+  }
+}
+
+async function addDoD(subtaskId) {
+  var subtask = subtasks.find(function(st) { return st.id === subtaskId; });
+  if (!subtask) return;
+  var dodList = copyDoD(subtask);
+  // Nouveau critère créé décoché : si la sous-tâche était terminée, elle
+  // repasse en cours (la complétion est dérivée du DoD).
+  dodList.push({ text: t('newCriterion'), done: false });
+  await applyDoDUpdate(subtask, dodList);
+  showToast(t('dodCriterionAdded'), 'info');
+}
+
+async function toggleDoD(subtaskId, index, done) {
+  var subtask = subtasks.find(function(st) { return st.id === subtaskId; });
+  if (!subtask) return;
+  var dodList = copyDoD(subtask);
+  if (!dodList[index]) return;
+  dodList[index].done = !!done;
+  await applyDoDUpdate(subtask, dodList);
+}
+
+async function renameDoD(subtaskId, index, input) {
+  var subtask = subtasks.find(function(st) { return st.id === subtaskId; });
+  if (!subtask) return;
+  var dodList = copyDoD(subtask);
+  if (!dodList[index]) return;
+  var newText = (input.value || '').trim();
+  if (!newText) {
+    input.value = dodList[index].text;   // texte vide : restaure la valeur en base
+    return;
+  }
+  dodList[index].text = newText;
+  await applyDoDUpdate(subtask, dodList);
+  showToast(t('dodCriterionUpdated'), 'info');
+}
+
+async function deleteDoD(subtaskId, index) {
+  var subtask = subtasks.find(function(st) { return st.id === subtaskId; });
+  if (!subtask) return;
+  var dodList = copyDoD(subtask);
+  if (!dodList[index]) return;
+  dodList.splice(index, 1);
+  await applyDoDUpdate(subtask, dodList);
+  showToast(t('dodCriterionDeleted'), 'info');
 }
 
 // Toggle pill selection for status/priority
@@ -7201,6 +7385,16 @@ async function saveEditSubtask(subtaskId, parentTaskId) {
   var newDueDate = dueDateInput && dueDateInput.value ? Math.floor(new Date(dueDateInput.value).getTime() / 1000) : null;
   var newStatus = statusSel ? statusSel.value : 'todo';
   var typeEl = document.getElementById('st-type-' + subtaskId);
+  // Definition of Done : quand des critères existent, le statut en découle
+  var _svSt = subtasks.find(function(sv) { return sv.id === subtaskId; });
+  if (_svSt && getDoD(_svSt).length > 0) {
+    if (isDoDFulfilled(_svSt)) {
+      newStatus = 'done';
+    } else if (newStatus === 'done') {
+      newStatus = 'progress';
+      showToast(t('dodIncomplete'), 'warning');
+    }
+  }
   var fields = {
     Title: newTitle,
     Description: descInput ? descInput.value : '',

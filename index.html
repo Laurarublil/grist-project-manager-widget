@@ -2267,6 +2267,55 @@
     .subtask-progress-fill.bar-progress { background: #3b82f6; }
     .subtask-progress-fill.bar-done { background: #22c55e; }
 
+    /* ========== DEFINITION OF DONE (DoD) ========== */
+    .subtask-dod { margin-top: 6px; }
+    .subtask-dod-label {
+      font-size: 10px; font-weight: 600; color: #94a3b8;
+      text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;
+    }
+    .subtask-dod-label .dod-count { color: #64748b; margin-left: 4px; }
+    .subtask-dod-list {
+      display: flex; flex-direction: column; gap: 4px;
+      border-left: 2px solid #e2e8f0; padding-left: 10px; margin-bottom: 6px;
+    }
+    .subtask-dod-list.dod-all-done { border-left-color: #22c55e; }
+    .dod-item {
+      display: flex; align-items: center; gap: 6px;
+      padding: 3px 6px; background: #f8fafc; border-radius: 6px; font-size: 12px;
+    }
+    .dod-item:hover { background: #f1f5f9; }
+    .dod-checkbox { width: 14px; height: 14px; accent-color: #22c55e; cursor: pointer; flex-shrink: 0; margin: 0; }
+    .dod-text {
+      flex: 1; border: none; background: transparent; color: #475569;
+      font-size: 12px; padding: 2px 4px; outline: none; min-width: 0;
+    }
+    .dod-text:focus { background: #fff; border-radius: 4px; box-shadow: 0 0 0 1px #3b82f6; }
+    .dod-delete {
+      width: 18px; height: 18px; border: none; background: transparent;
+      color: #cbd5e1; cursor: pointer; border-radius: 4px; font-size: 11px;
+      opacity: 0; transition: opacity 0.15s; flex-shrink: 0; line-height: 1;
+    }
+    .dod-item:hover .dod-delete { opacity: 1; }
+    .dod-delete:hover { background: #fee2e2; color: #ef4444; }
+    .dod-add-btn {
+      margin-top: 4px; padding: 3px 10px; background: transparent;
+      border: 1px dashed #cbd5e1; border-radius: 6px; color: #94a3b8;
+      font-size: 11px; cursor: pointer; transition: all 0.15s;
+    }
+    .dod-add-btn:hover { border-color: #3b82f6; color: #3b82f6; background: #eff6ff; }
+    body.dark-mode .dod-item { background: #1e293b; }
+    body.dark-mode .dod-item:hover { background: #334155; }
+    body.dark-mode .dod-text { color: #e2e8f0; }
+    body.dark-mode .dod-text:focus { background: #0f172a; }
+    body.dark-mode .subtask-dod-list { border-left-color: #334155; }
+    body.dark-mode .subtask-dod-list.dod-all-done { border-left-color: #4ade80; }
+    body.dark-mode .subtask-dod-label { color: #94a3b8; }
+    body.dark-mode .subtask-dod-label .dod-count { color: #cbd5e1; }
+    body.dark-mode .dod-delete { color: #475569; }
+    body.dark-mode .dod-delete:hover { background: #450a0a; color: #fca5a5; }
+    body.dark-mode .dod-add-btn { border-color: #475569; color: #94a3b8; }
+    body.dark-mode .dod-add-btn:hover { border-color: #818cf8; color: #818cf8; background: #1e3a5f; }
+
     .subtasks-section {
       margin-top: 16px;
       padding: 12px;
@@ -3275,6 +3324,7 @@
     .toast-success { background: #22c55e; }
     .toast-error { background: #ef4444; }
     .toast-info { background: #3b82f6; }
+    .toast-warning { background: #f59e0b; }
     @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 
     /* ========== NOT IN GRIST ========== */
