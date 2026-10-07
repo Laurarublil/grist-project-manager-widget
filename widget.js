@@ -4612,7 +4612,7 @@ function getGanttSubtasks(taskId) {
 function renderGanttSubtaskLabelCell(st, parentTaskId) {
   var completedClass = st.Completed ? ' style="text-decoration:line-through;opacity:0.5;"' : '';
   var html = '<td class="gantt-task-label gantt-subtask-cell gantt-clickable-label" onclick="openEditTaskModal(' + parentTaskId + ')"' + completedClass + '>';
-  html += '<span style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">';
+  html += '<span style="display:block;white-space:normal;overflow-wrap:break-word;" title="' + sanitize(st.Title) + '">';
   html += '<span style="font-size:10px;color:#94a3b8;margin-right:4px;">' + (isMilestone(st) ? '◆' : '↳') + '</span>';
   html += '<span style="font-size:11px;' + (isMilestone(st) ? 'font-weight:700;' : '') + '">' + sanitize(st.Title) + '</span>';
   html += '</span>';
