@@ -4606,20 +4606,26 @@ function getGanttSubtasks(taskId) {
   return getVisibleTaskSubtasks(taskId).filter(function(st) { return st.Due_Date; });
 }
 
-// Construit la <td> de libellé d'une sous-tâche (indentée, allégée, cliquable)
+// Construit la <td> de libellé d'une sous-tâche (indentée, allégée, cliquable).
+// La dépendance (et les méta) sont sur une 2e ligne sous le titre : la colonne
+// de 220px avec overflow:hidden rognait l'indicateur placé après le titre.
 function renderGanttSubtaskLabelCell(st, parentTaskId) {
   var completedClass = st.Completed ? ' style="text-decoration:line-through;opacity:0.5;"' : '';
   var html = '<td class="gantt-task-label gantt-subtask-cell gantt-clickable-label" onclick="openEditTaskModal(' + parentTaskId + ')"' + completedClass + '>';
+  html += '<span style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">';
   html += '<span style="font-size:10px;color:#94a3b8;margin-right:4px;">' + (isMilestone(st) ? '◆' : '↳') + '</span>';
   html += '<span style="font-size:11px;' + (isMilestone(st) ? 'font-weight:700;' : '') + '">' + sanitize(st.Title) + '</span>';
-  // A1 : indicateur de dépendance entre sous-tâches
+  html += '</span>';
+  // A1 : indicateur de dépendance entre sous-tâches (2e ligne, toujours visible)
+  var meta = '';
   var stBlocker = getSubtaskBlocker(st);
   if (stBlocker) {
     var depColor = stBlocker.Completed ? '#94a3b8' : '#ef4444';
-    html += '<span style="font-size:9px;color:' + depColor + ';margin-left:6px;white-space:nowrap;" title="' + (currentLang === 'fr' ? 'Dépend de' : 'Depends on') + ' : ' + sanitize(stBlocker.Title) + '">🔗 ' + sanitize(stBlocker.Title).substring(0, 14) + '</span>';
+    meta += '<span style="font-size:9px;color:' + depColor + ';" title="' + (currentLang === 'fr' ? 'Dépend de' : 'Depends on') + ' : ' + sanitize(stBlocker.Title) + '">🔗 ' + sanitize(stBlocker.Title) + '</span>';
   }
-  if (st.Due_Date) html += '<span style="font-size:9px;color:#94a3b8;margin-left:6px;">📅 ' + formatDate(st.Due_Date) + '</span>';
-  if (st.Assignee) html += '<span style="font-size:9px;color:#94a3b8;margin-left:4px;">👤 ' + sanitize(st.Assignee).split(',')[0].trim().substring(0, 10) + '</span>';
+  if (st.Due_Date) meta += '<span style="font-size:9px;color:#94a3b8;margin-left:6px;">📅 ' + formatDate(st.Due_Date) + '</span>';
+  if (st.Assignee) meta += '<span style="font-size:9px;color:#94a3b8;margin-left:4px;">👤 ' + sanitize(st.Assignee).split(',')[0].trim().substring(0, 10) + '</span>';
+  if (meta) html += '<span style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px;">' + meta + '</span>';
   html += '</td>';
   return html;
 }
@@ -4633,7 +4639,9 @@ function ganttSubtaskBarClass(st, parentTask) {
   if (st.Completed) base = 'gantt-bar-done';
   else if (parentTask.Status === 'progress') base = 'gantt-bar-progress';
   else base = 'gantt-bar-todo';
-  return base + (isMilestone(st) ? ' gantt-bar-milestone' : '');
+  var cls = base + (isMilestone(st) ? ' gantt-bar-milestone' : '');
+  if (isSubtaskBlocked(st)) cls += ' gantt-bar-st-blocked';   // dépendance non satisfaite
+  return cls;
 }
 
 // Bornes de la sous-tâche. B2 : un jalon est une date unique (Due_Date) → start = end.
@@ -4773,7 +4781,65 @@ function ganttCenterOnToday() {
   container.scrollLeft = Math.max(0, col.offsetLeft + col.offsetWidth / 2 - labelW - visible / 2);
 }
 
+// Flèches de dépendance entre sous-tâches : calque SVG posé sur le Gantt après
+// le rendu, à partir des positions réelles des barres (attribut data-stbar).
+// Tracé finish-to-start : bord droit de la barre bloqueuse -> bord gauche de
+// la barre dépendante, rouge si le bloqueur n'est pas terminé, gris sinon.
+function drawSubtaskDependencyArrows() {
+  var container = document.querySelector('#gantt-view .gantt-container');
+  if (!container) return;
+  var old = document.getElementById('gantt-st-deps-svg');
+  if (old && old.parentNode === container) container.removeChild(old);
+  var cRect = container.getBoundingClientRect();
+  var svgNS = 'http://www.w3.org/2000/svg';
+  var overlay = document.createElementNS(svgNS, 'svg');
+  overlay.setAttribute('id', 'gantt-st-deps-svg');
+  overlay.setAttribute('width', container.scrollWidth);
+  overlay.setAttribute('height', container.scrollHeight);
+  overlay.style.cssText = 'position:absolute;top:0;left:0;pointer-events:none;z-index:20;overflow:visible;';
+  var count = 0;
+  subtasks.forEach(function(st) {
+    if (!st.Blocked_By_Subtask_Id) return;
+    var depBar = container.querySelector('[data-stbar="' + st.id + '"]');
+    var blockerBar = container.querySelector('[data-stbar="' + st.Blocked_By_Subtask_Id + '"]');
+    var blocker = subtasks.find(function(s2) { return s2.id === st.Blocked_By_Subtask_Id; });
+    if (!depBar || !blockerBar || !blocker) return;
+    var r1 = blockerBar.getBoundingClientRect();   // fin de la barre bloqueuse
+    var r2 = depBar.getBoundingClientRect();       // début de la barre dépendante
+    var x1 = r1.right - cRect.left + container.scrollLeft;
+    var y1 = r1.top + r1.height / 2 - cRect.top + container.scrollTop;
+    var x2 = r2.left - cRect.left + container.scrollLeft;
+    var y2 = r2.top + r2.height / 2 - cRect.top + container.scrollTop;
+    if (y1 === y2) return;                          // même ligne : rien à relier
+    var color = blocker.Completed ? '#94a3b8' : '#ef4444';
+    var dir = x2 >= x1 ? 1 : -1;
+    var midX = x1 + 8;
+    if (dir === 1 && midX > x2 - 8) midX = (x1 + x2) / 2;
+    var stopX = x2 - 7 * dir;
+    var path = document.createElementNS(svgNS, 'path');
+    path.setAttribute('d', 'M ' + x1 + ' ' + y1 + ' L ' + midX + ' ' + y1 + ' L ' + midX + ' ' + y2 + ' L ' + stopX + ' ' + y2);
+    path.setAttribute('fill', 'none');
+    path.setAttribute('stroke', color);
+    path.setAttribute('stroke-width', '1.5');
+    path.setAttribute('opacity', '0.9');
+    overlay.appendChild(path);
+    var head = document.createElementNS(svgNS, 'polygon');
+    head.setAttribute('points', x2 + ',' + y2 + ' ' + (x2 + 7 * dir) + ',' + (y2 - 4) + ' ' + (x2 + 7 * dir) + ',' + (y2 + 4));
+    head.setAttribute('fill', color);
+    overlay.appendChild(head);
+    var dot = document.createElementNS(svgNS, 'circle');
+    dot.setAttribute('cx', x1);
+    dot.setAttribute('cy', y1);
+    dot.setAttribute('r', '2.5');
+    dot.setAttribute('fill', color);
+    overlay.appendChild(dot);
+    count++;
+  });
+  if (count > 0) container.appendChild(overlay);
+}
+
 function ganttAfterRender() {
+  drawSubtaskDependencyArrows();
   if (!ganttPendingCenter) return;
   ganttPendingCenter = false;
   requestAnimationFrame(function() { ganttCenterOnToday(); });
@@ -4934,7 +5000,7 @@ function renderGanttView() {
           for (var wi2 = 0; wi2 < weeks.length; wi2++) {
             html += '<td class="gantt-cell' + (wi2 === wTodayIdx ? ' today-col' : '') + '" style="position:relative;min-width:' + weekColW + 'px;">';
             if (stGeom && wi2 === stGeom.idx) {
-              html += '<div class="gantt-bar gantt-bar-subtask ' + stBarClass + '" style="left:' + stGeom.left + 'px;width:' + stGeom.width + 'px;cursor:pointer;" title="' + sanitize(st.Title) + '" onclick="openEditTaskModal(' + task.id + ')"></div>';
+              html += '<div class="gantt-bar gantt-bar-subtask ' + stBarClass + '" data-stbar="' + st.id + '" style="left:' + stGeom.left + 'px;width:' + stGeom.width + 'px;cursor:pointer;" title="' + sanitize(st.Title) + '" onclick="openEditTaskModal(' + task.id + ')"></div>';
             }
             html += '</td>';
           }
@@ -5061,7 +5127,7 @@ function renderGanttView() {
             html += '<td class="gantt-cell" style="position:relative;min-width:' + colWidth + 'px;">';
             if (ym3 === stYStart) {
               var stYW = (stYEnd - stYStart + 1) * colWidth;
-              html += '<div class="gantt-bar gantt-bar-subtask ' + stBarClass + '" style="left:2px;width:' + stYW + 'px;cursor:pointer;" title="' + sanitize(st.Title) + '" onclick="openEditTaskModal(' + task.id + ')"></div>';
+              html += '<div class="gantt-bar gantt-bar-subtask ' + stBarClass + '" data-stbar="' + st.id + '" style="left:2px;width:' + stYW + 'px;cursor:pointer;" title="' + sanitize(st.Title) + '" onclick="openEditTaskModal(' + task.id + ')"></div>';
             }
             html += '</td>';
           }
@@ -5159,7 +5225,7 @@ function renderGanttView() {
               html += '<div style="position:absolute;top:0;bottom:0;left:' + todayDayPct + '%;width:2px;background:#ef4444;z-index:1;pointer-events:none;"></div>';
             }
             if (stGeom && m2 === stGeom.idx) {
-              html += '<div class="gantt-bar gantt-bar-subtask ' + stBarClass + '" style="left:' + stGeom.left + 'px;width:' + stGeom.width + 'px;cursor:pointer;" title="' + sanitize(st.Title) + '" onclick="openEditTaskModal(' + task.id + ')"></div>';
+              html += '<div class="gantt-bar gantt-bar-subtask ' + stBarClass + '" data-stbar="' + st.id + '" style="left:' + stGeom.left + 'px;width:' + stGeom.width + 'px;cursor:pointer;" title="' + sanitize(st.Title) + '" onclick="openEditTaskModal(' + task.id + ')"></div>';
             }
             html += '</td>';
           }
@@ -5321,7 +5387,7 @@ function renderGanttView() {
           if (di2 === stBarStartIdx) {
             var stSpanDays = stBarEndIdx - stBarStartIdx + 1;
             var stWidth = stSpanDays * 36;
-            html += '<div class="gantt-bar gantt-bar-subtask ' + stBarClass + '" style="left:2px;width:' + stWidth + 'px;cursor:pointer;" title="' + sanitize(st.Title) + '" onclick="openEditTaskModal(' + task.id + ')"></div>';
+            html += '<div class="gantt-bar gantt-bar-subtask ' + stBarClass + '" data-stbar="' + st.id + '" style="left:2px;width:' + stWidth + 'px;cursor:pointer;" title="' + sanitize(st.Title) + '" onclick="openEditTaskModal(' + task.id + ')"></div>';
           }
           html += '</td>';
         }
