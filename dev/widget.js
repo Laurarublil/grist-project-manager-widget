@@ -6462,11 +6462,24 @@ function openEditTaskModal(taskId, preserveAssignees) {
       }
       if (stDueDateStr) html += '<span class="subtask-due-badge' + stDueClass + '">📅 ' + stDueDateStr + '</span>';
       if (st.Estimated_Hours) html += '<span class="subtask-assignee-badge">⏱ ' + st.Estimated_Hours + 'h</span>';
-      if (dodList.length > 0) html += '<span class="subtask-assignee-badge" title="' + t('definitionOfDone') + '">☑️ ' + dodDone + '/' + dodList.length + '</span>';
       html += '</span>';
       html += '<button class="subtask-edit-btn" onclick="startEditSubtask(' + st.id + ', ' + task.id + ')" title="' + t('editSubtask') + '">✏️</button>';
       html += '<button class="subtask-delete" onclick="deleteSubtask(' + st.id + ', ' + task.id + ')" title="' + t('delete') + '">✕</button>';
       html += '</div>';
+      // Definition of Done en vue affichage : cases à cocher modifiables, sans ajout ni suppression
+      if (dodList.length > 0) {
+        html += '<div class="subtask-dod" id="st-view-dod-' + st.id + '">';
+        html += '<div class="subtask-dod-label">' + t('definitionOfDone') + ' <span class="dod-count">' + dodDone + '/' + dodList.length + '</span></div>';
+        html += '<div class="subtask-dod-list' + (dodDone === dodList.length ? ' dod-all-done' : '') + '">';
+        dodList.forEach(function(d, di) {
+          html += '<div class="dod-item">';
+          html += '<input type="checkbox" class="dod-checkbox"' + (d.done ? ' checked' : '') + ' onchange="toggleDoD(' + st.id + ', ' + di + ', this.checked)" />';
+          html += '<span class="dod-text-view' + (d.done ? ' dod-text-done' : '') + '">' + sanitize(d.text || '') + '</span>';
+          html += '</div>';
+        });
+        html += '</div>';
+        html += '</div>';
+      }
       // Edit view (hidden by default)
       // Assignés multiples : liste de cases à cocher (comme les tâches, séparés par virgule)
       var stAssignees = (st.Assignee || '').split(',').map(function(a) { return a.trim(); }).filter(Boolean);
@@ -6493,9 +6506,9 @@ function openEditTaskModal(taskId, preserveAssignees) {
       // B2 : type (sous-tâche / jalon)
       var stType = st.Type || 'subtask';
       html += '<div><div class="st-pill-label">' + (currentLang === 'fr' ? 'Type' : 'Type') + '</div>';
-      html += '<div class="st-pill-group">';
-      html += '<button type="button" class="st-pill' + (stType !== 'milestone' ? ' active-progress' : '') + '" onclick="setStType(' + st.id + ',\'subtask\',this)">' + (currentLang === 'fr' ? '↳ Sous-tâche' : '↳ Subtask') + '</button>';
-      html += '<button type="button" class="st-pill' + (stType === 'milestone' ? ' active-progress' : '') + '" onclick="setStType(' + st.id + ',\'milestone\',this)">' + (currentLang === 'fr' ? '◆ Jalon (1 date)' : '◆ Milestone (1 date)') + '</button>';
+      html += '<div class="st-pill-group" id="st-type-group-' + st.id + '">';
+      html += '<button type="button" class="st-pill' + (stType !== 'milestone' ? ' active-progress' : '') + '" data-key="subtask" onclick="setStType(' + st.id + ',\'subtask\',this)">' + (currentLang === 'fr' ? '↳ Sous-tâche' : '↳ Subtask') + '</button>';
+      html += '<button type="button" class="st-pill' + (stType === 'milestone' ? ' active-progress' : '') + '" data-key="milestone" onclick="setStType(' + st.id + ',\'milestone\',this)">' + (currentLang === 'fr' ? '◆ Jalon (1 date)' : '◆ Milestone (1 date)') + '</button>';
       html += '</div>';
       html += '<input type="hidden" id="st-type-' + st.id + '" value="' + stType + '">';
       html += '</div>';
@@ -6506,7 +6519,7 @@ function openEditTaskModal(taskId, preserveAssignees) {
       getKanbanStatuses().forEach(function(s) {
         var sLbl = (s.emoji ? s.emoji + ' ' : '') + (currentLang === 'fr' ? s.label_fr : s.label_en);
         var sActiveStyle = (stStatus === s.key) ? ('background:' + (s.color || '#3b82f6') + ';color:#fff;border-color:' + (s.color || '#3b82f6') + ';') : '';
-        html += '<button type="button" class="st-pill" style="' + sActiveStyle + '" onclick="setStStatus(' + st.id + ',\'' + s.key + '\',this)">' + sanitize(sLbl) + '</button>';
+        html += '<button type="button" class="st-pill" style="' + sActiveStyle + '" data-key="' + s.key + '" onclick="setStStatus(' + st.id + ',\'' + s.key + '\',this)">' + sanitize(sLbl) + '</button>';
       });
       html += '</div>';
       html += '<input type="hidden" id="st-status-' + st.id + '" value="' + stStatus + '">';
@@ -6516,7 +6529,7 @@ function openEditTaskModal(taskId, preserveAssignees) {
       html += '<div class="st-pill-label">' + (currentLang === 'fr' ? 'Priorité' : 'Priority') + '</div>';
       html += '<div class="st-pill-group" id="st-priority-group-' + st.id + '">';
       ['high','medium','low'].forEach(function(p) {
-        html += '<button type="button" class="st-pill' + (stPriority === p ? ' active-' + p : '') + '" onclick="setStPill(\'priority\',' + st.id + ',\'' + p + '\',this)">' + prLbl[p] + '</button>';
+        html += '<button type="button" class="st-pill' + (stPriority === p ? ' active-' + p : '') + '" data-key="' + p + '" onclick="setStPill(\'priority\',' + st.id + ',\'' + p + '\',this)">' + prLbl[p] + '</button>';
       });
       html += '</div>';
       html += '<input type="hidden" id="st-priority-' + st.id + '" value="' + stPriority + '">';
@@ -7199,12 +7212,13 @@ function copyDoD(subtask) {
 // - tous les critères cochés -> Completed true / Status 'done'
 // - au moins un critère décoché (ou liste vidée) sur une sous-tâche terminée
 //   -> Completed false / Status 'progress'
-async function applyDoDUpdate(subtask, dodList) {
+async function applyDoDUpdate(subtask, dodList, keepEditOpen) {
   var savedAssignees = editAssignees.slice();
   var savedAccountable = editAccountable.slice();
   var savedConsulted = editConsulted.slice();
   var savedInformed = editInformed.slice();
   var scrollPos = getModalScrollTop();
+  var stFormState = keepEditOpen ? snapshotSubtaskForm(subtask.id) : null;
   await persistTaskFormFields(subtask.Parent_Task_Id);   // préserve la saisie parent en cours
   var allDone = dodList.length > 0 && dodList.every(function(d) { return d.done; });
   var fields = { DefinitionOfDone: dodList.length > 0 ? JSON.stringify(dodList) : null };
@@ -7232,6 +7246,7 @@ async function applyDoDUpdate(subtask, dodList) {
     editConsulted = savedConsulted;
     editInformed = savedInformed;
     openEditTaskModal(subtask.Parent_Task_Id, true);
+    if (stFormState) restoreSubtaskForm(subtask.id, stFormState);
     restoreModalScrollTop(scrollPos);
   } catch (e) {
     console.error('Error updating DoD:', e);
@@ -7246,7 +7261,7 @@ async function addDoD(subtaskId, criterionText) {
   // Nouveau critère créé décoché : si la sous-tâche était terminée, elle
   // repasse en cours (la complétion est dérivée du DoD).
   dodList.push({ text: (criterionText && criterionText.trim()) ? criterionText.trim() : t('newCriterion'), done: false });
-  await applyDoDUpdate(subtask, dodList);
+  await applyDoDUpdate(subtask, dodList, true);
   showToast(t('dodCriterionAdded'), 'info');
 }
 
@@ -7256,7 +7271,7 @@ function addDoDFromInput(subtaskId) {
   if (!input) return;
   var text = input.value;
   if (!text || !text.trim()) { input.focus(); return; }
-  addDoD(subtaskId, text).then(function() { input.value = ''; input.focus(); });
+  addDoD(subtaskId, text);
 }
 
 async function toggleDoD(subtaskId, index, done) {
@@ -7265,7 +7280,7 @@ async function toggleDoD(subtaskId, index, done) {
   var dodList = copyDoD(subtask);
   if (!dodList[index]) return;
   dodList[index].done = !!done;
-  await applyDoDUpdate(subtask, dodList);
+  await applyDoDUpdate(subtask, dodList, true);
 }
 
 async function renameDoD(subtaskId, index, input) {
@@ -7279,7 +7294,7 @@ async function renameDoD(subtaskId, index, input) {
     return;
   }
   dodList[index].text = newText;
-  await applyDoDUpdate(subtask, dodList);
+  await applyDoDUpdate(subtask, dodList, true);
   showToast(t('dodCriterionUpdated'), 'info');
 }
 
@@ -7289,7 +7304,7 @@ async function deleteDoD(subtaskId, index) {
   var dodList = copyDoD(subtask);
   if (!dodList[index]) return;
   dodList.splice(index, 1);
-  await applyDoDUpdate(subtask, dodList);
+  await applyDoDUpdate(subtask, dodList, true);
   showToast(t('dodCriterionDeleted'), 'info');
 }
 
@@ -7331,18 +7346,75 @@ function setStPill(field, subtaskId, value, btn) {
 // Édition inline d'une sous-tâche
 function startEditSubtask(subtaskId) {
   var viewEl = document.getElementById('st-view-' + subtaskId);
+  var viewDodEl = document.getElementById('st-view-dod-' + subtaskId);
   var editEl = document.getElementById('st-edit-' + subtaskId);
   if (viewEl) viewEl.style.display = 'none';
+  if (viewDodEl) viewDodEl.style.display = 'none';
   if (editEl) { editEl.style.display = 'flex'; var t = document.getElementById('st-title-' + subtaskId); if (t) t.focus(); }
 }
 
 function cancelEditSubtask(subtaskId) {
   var viewEl = document.getElementById('st-view-' + subtaskId);
+  var viewDodEl = document.getElementById('st-view-dod-' + subtaskId);
   var editEl = document.getElementById('st-edit-' + subtaskId);
   if (viewEl) viewEl.style.display = 'flex';
+  if (viewDodEl) viewDodEl.style.display = '';
   if (editEl) editEl.style.display = 'none';
 }
 
+// Instantané du formulaire d'édition d'une sous-tâche, pour le rouvrir tel quel
+// après un re-render de la modale (ajout/modif/suppression d'un critère DoD).
+function snapshotSubtaskForm(subtaskId) {
+  var snap = null;
+  ['st-title-','st-desc-','st-type-','st-status-','st-priority-','st-start-','st-due-','st-hours-','st-assignee-search-'].forEach(function(pfx) {
+    var el = document.getElementById(pfx + subtaskId);
+    if (el) {
+      if (!snap) snap = {};
+      snap[pfx] = el.value;
+    }
+  });
+  var box = document.getElementById('st-assignee-' + subtaskId);
+  if (box) {
+    if (!snap) snap = {};
+    snap.assignees = [];
+    box.querySelectorAll('input[type="checkbox"]').forEach(function(c) {
+      if (c.checked) snap.assignees.push(c.value);
+    });
+  }
+  return snap;
+}
+
+// Rouvre le formulaire d'édition de la sous-tâche, restaure l'état figé, puis place
+// le focus sur le champ « Saisir un critère... ».
+function restoreSubtaskForm(subtaskId, snap) {
+  if (snap) startEditSubtask(subtaskId);   // formulaire fermé avant l'opération : ne pas l'ouvrir
+  if (!snap) return;
+  ['st-title-','st-desc-','st-start-','st-due-','st-hours-'].forEach(function(pfx) {
+    var el = document.getElementById(pfx + subtaskId);
+    if (el && snap[pfx] !== undefined) el.value = snap[pfx];
+  });
+  var search = document.getElementById('st-assignee-search-' + subtaskId);
+  if (search && snap['st-assignee-search-'] !== undefined) {
+    search.value = snap['st-assignee-search-'];
+    filterStAssignees(subtaskId, snap['st-assignee-search-']);
+  }
+  var box = document.getElementById('st-assignee-' + subtaskId);
+  if (box && snap.assignees) {
+    box.querySelectorAll('input[type="checkbox"]').forEach(function(c) {
+      c.checked = snap.assignees.indexOf(c.value) !== -1;
+    });
+  }
+  // Pastilles type/statut/priorité : clique le bouton correspondant pour
+  // resynchroniser le visuel et le champ caché sur la valeur figée.
+  [['st-type-group-', snap['st-type-']], ['st-status-group-', snap['st-status-']], ['st-priority-group-', snap['st-priority-']]].forEach(function(pair) {
+    if (pair[1] === undefined) return;
+    var grp = document.getElementById(pair[0] + subtaskId);
+    var btn = grp ? grp.querySelector('[data-key="' + pair[1] + '"]') : null;
+    if (btn) btn.click();
+  });
+  var dodInput = document.getElementById('st-dod-new-' + subtaskId);
+  if (dodInput) dodInput.focus();
+}
 // Filtre la liste des assignés d'une sous-tâche selon la saisie clavier
 function filterStAssignees(subtaskId, query) {
   var box = document.getElementById('st-assignee-' + subtaskId);
