@@ -1533,11 +1533,12 @@ function downloadAttachment(recordId) {
   document.body.removeChild(a);
 }
 
-async function deleteAttachment(recordId, taskId) {
+async function deleteAttachment(recordId, taskId, subtaskId) {
   if (!confirm(currentLang === 'fr' ? 'Supprimer cette pièce jointe ?' : 'Delete this attachment?')) return;
   try {
     await grist.docApi.applyUserActions([['RemoveRecord', ATTACHMENTS_TABLE, recordId]]);
     await loadAllData();
+    if (subtaskId) renderSubtaskAttachmentsSection(subtaskId);
     renderAttachmentsSection(taskId);
     if (typeof refreshAllViews === 'function') refreshAllViews();
   } catch (e) {
@@ -1584,8 +1585,7 @@ function renderAttachmentsSection(taskId) {
     html = '<div class="attach-empty">' + (currentLang === 'fr' ? 'Aucune pièce jointe' : 'No attachments') + '</div>';
   } else {
     list.forEach(function(att) {
-      var isImg = attachmentIsImage(att.File_Type, att.File_Name);
-      var icon = isImg ? '🖼️' : (attachmentIsPdf(att.File_Type, att.File_Name) ? '📄' : '📎');
+      var icon = attachmentIcon(att.File_Type, att.File_Name);
       html += '<div class="attach-item">';
       html += '<span class="attach-icon">' + icon + '</span>';
       html += '<span class="attach-name" onclick="viewAttachment(' + att.id + ')" title="' + (currentLang === 'fr' ? 'Voir' : 'View') + '">' + sanitize(att.File_Name) + '</span>';
@@ -1597,6 +1597,86 @@ function renderAttachmentsSection(taskId) {
   }
   container.innerHTML = html;
 }
+
+// Icône d'une pièce jointe selon son type (image, PDF, Word, PPT, XLS...)
+function attachmentIcon(type, name) {
+  if (attachmentIsImage(type, name)) return '🖼️';
+  if (attachmentIsPdf(type, name)) return '📄';
+  if (/\.(docx?|rtf|odt)$/i.test(name || '')) return '📝';
+  if (/\.(pptx?|odp)$/i.test(name || '')) return '📊';
+  if (/\.(xlsx?|csv|ods)$/i.test(name || '')) return '📈';
+  return '📎';
+}
+
+// Pièces jointes d'une sous-tâche : même table PM_Attachments, colonne Subtask_Id
+function getSubtaskAttachments(subtaskId) {
+  return attachments.filter(function(a) { return a.Subtask_Id === subtaskId; })
+    .sort(function(a, b) { return (a.Created_At || 0) - (b.Created_At || 0); });
+}
+
+// Upload de fichiers (base64) pour une sous-tâche
+async function uploadSubtaskAttachments(subtaskId, parentTaskId, fileList) {
+  if (!fileList || !fileList.length) return;
+  var statusEl = document.getElementById('st-attach-status-' + subtaskId);
+  try {
+    var addedCount = 0, skipped = [];
+    for (var i = 0; i < fileList.length; i++) {
+      var file = fileList[i];
+      if (statusEl) statusEl.textContent = (currentLang === 'fr' ? 'Traitement de ' : 'Processing ') + file.name + '...';
+      var dataUrl = attachmentIsImage(file.type, file.name)
+        ? await compressImageFile(file)
+        : await readFileAsDataURL(file);
+      if (!dataUrl) { skipped.push(file.name); continue; }
+      var approxBytes = Math.round(dataUrl.length * 0.75);
+      if (approxBytes > ATTACH_MAX_BYTES) { skipped.push(file.name + ' (' + formatFileSize(approxBytes) + ')'); continue; }
+      await grist.docApi.applyUserActions([
+        ['AddRecord', ATTACHMENTS_TABLE, null, {
+          Task_Id: parentTaskId,
+          Subtask_Id: subtaskId,
+          File_Name: file.name,
+          File_Type: file.type || '',
+          File_Size: file.size || 0,
+          File_Data: dataUrl,
+          Created_At: Math.floor(Date.now() / 1000)
+        }]
+      ]);
+      addedCount++;
+    }
+    if (statusEl) statusEl.textContent = '';
+    await loadAllData();
+    renderSubtaskAttachmentsSection(subtaskId);
+    if (typeof refreshAllViews === 'function') refreshAllViews();
+    if (addedCount > 0) showToast((currentLang === 'fr' ? 'Pièce(s) jointe(s) ajoutée(s) : ' : 'Attachment(s) added: ') + addedCount, 'success');
+    if (skipped.length) showToast((currentLang === 'fr' ? 'Trop volumineux (max 5 Mo), ignoré : ' : 'Too large (max 5MB), skipped: ') + skipped.join(', '), 'error');
+  } catch (e) {
+    console.error('[GristPM] uploadSubtaskAttachments error:', e);
+    if (statusEl) statusEl.textContent = '';
+    showToast((currentLang === 'fr' ? 'Échec : ' : 'Failed: ') + e.message, 'error');
+  }
+}
+
+// (Re)construit la liste des pièces jointes d'une sous-tâche dans son formulaire d'édition
+function renderSubtaskAttachmentsSection(subtaskId) {
+  var container = document.getElementById('st-attachments-list-' + subtaskId);
+  if (!container) return;
+  var list = getSubtaskAttachments(subtaskId);
+  var html = '';
+  if (list.length === 0) {
+    html = '<div class="attach-empty">' + (currentLang === 'fr' ? 'Aucune pièce jointe' : 'No attachments') + '</div>';
+  } else {
+    list.forEach(function(att) {
+      html += '<div class="attach-item">';
+      html += '<span class="attach-icon">' + attachmentIcon(att.File_Type, att.File_Name) + '</span>';
+      html += '<span class="attach-name" onclick="viewAttachment(' + att.id + ')" title="' + (currentLang === 'fr' ? 'Voir' : 'View') + '">' + sanitize(att.File_Name) + '</span>';
+      html += '<span class="attach-size">' + formatFileSize(att.File_Size) + '</span>';
+      html += '<button class="attach-btn" onclick="downloadAttachment(' + att.id + ')" title="' + (currentLang === 'fr' ? 'Télécharger' : 'Download') + '">⬇️</button>';
+      if (isOwner) html += '<button class="attach-btn" onclick="deleteAttachment(' + att.id + ', 0, ' + subtaskId + ')" title="' + t('delete') + '">🗑️</button>';
+      html += '</div>';
+    });
+  }
+  container.innerHTML = html;
+}
+
 
 function getTaskTotalTime(taskId) {
   var entries = getTaskTimeEntries(taskId);
@@ -1942,19 +2022,21 @@ async function ensureTables() {
           { id: 'File_Name', type: 'Text' },
           { id: 'File_Type', type: 'Text' },
           { id: 'File_Size', type: 'Int' },
+          { id: 'Subtask_Id', type: 'Int' },
           { id: 'File_Data', type: 'Text' },
           { id: 'Created_At', type: 'DateTime' }
         ]]
       ]);
     } else {
-      // Migration : ajouter File_Data si la table existe déjà (ancienne version avec colonne Attachments)
+      // Migration : ajouter File_Data et Subtask_Id si la table existe déjà
       try {
         var attCols = Object.keys(await grist.docApi.fetchTable(ATTACHMENTS_TABLE));
-        if (attCols.indexOf('File_Data') === -1) {
-          await grist.docApi.applyUserActions([['AddColumn', ATTACHMENTS_TABLE, 'File_Data', { type: 'Text' }]]);
-        }
+        var attMig = [];
+        if (attCols.indexOf('File_Data') === -1) attMig.push(['AddColumn', ATTACHMENTS_TABLE, 'File_Data', { type: 'Text' }]);
+        if (attCols.indexOf('Subtask_Id') === -1) attMig.push(['AddColumn', ATTACHMENTS_TABLE, 'Subtask_Id', { type: 'Int' }]);
+        if (attMig.length) await grist.docApi.applyUserActions(attMig);
       } catch (mig) {
-        console.log('[GristPM] Migration File_Data ignorée :', mig.message);
+        console.log('[GristPM] Migration pièces jointes ignorée :', mig.message);
       }
     }
 
@@ -2443,6 +2525,7 @@ async function loadAllData() {
         attachments.push({
           id: attData.id[i],
           Task_Id: attData.Task_Id ? attData.Task_Id[i] : null,
+          Subtask_Id: attData.Subtask_Id ? attData.Subtask_Id[i] : null,
           File_Name: attData.File_Name ? attData.File_Name[i] : '',
           File_Type: attData.File_Type ? attData.File_Type[i] : '',
           File_Size: attData.File_Size ? attData.File_Size[i] : 0,
@@ -6582,6 +6665,15 @@ function openEditTaskModal(taskId, preserveAssignees) {
       html += '<input type="text" id="st-dod-new-' + st.id + '" class="st-dod-add-input" placeholder="' + (currentLang === 'fr' ? 'Saisir un critère...' : 'Enter a criterion...') + '" onkeypress="if(event.key===\'Enter\'){event.preventDefault();addDoDFromInput(' + st.id + ')}">';
       html += '<button type="button" class="dod-add-btn" onclick="addDoDFromInput(' + st.id + ')" title="' + t('addCriterion') + '">➕</button>';
       html += '</div>';
+      // Pièces jointes de la sous-tâche (Word, PDF, PPT, XLS...)
+      html += '<div class="subtask-attach">';
+      html += '<div class="subtask-dod-label">' + (currentLang === 'fr' ? 'Pièces jointes' : 'Attachments') + ' <span class="dod-count">' + getSubtaskAttachments(st.id).length + '</span></div>';
+      html += '<div class="attachments-list" id="st-attachments-list-' + st.id + '"></div>';
+      html += '<div class="attach-add-row">';
+      html += '<label class="attach-upload-btn" style="font-size:11px;padding:4px 12px;">📎 ' + (currentLang === 'fr' ? 'Ajouter un fichier' : 'Add file') + '<input type="file" multiple accept=".doc,.docx,.pdf,.ppt,.pptx,.xls,.xlsx" style="display:none;" onchange="uploadSubtaskAttachments(' + st.id + ', ' + task.id + ', Array.from(this.files)); this.value=\'\';"></label>';
+      html += '<span class="attach-status" id="st-attach-status-' + st.id + '"></span>';
+      html += '</div>';
+      html += '</div>';
       // Actions
       html += '<div class="st-form-actions">';
       html += '<button type="button" class="subtask-cancel-btn" onclick="cancelEditSubtask(' + st.id + ')">' + (currentLang === 'fr' ? 'Annuler' : 'Cancel') + '</button>';
@@ -6875,6 +6967,7 @@ function openEditTaskModal(taskId, preserveAssignees) {
   document.getElementById('modal-container').innerHTML = html;
   // D2 : remplir la liste des pièces jointes (token asynchrone à part)
   renderAttachmentsSection(task.id);
+  taskSubtasks.forEach(function(st) { renderSubtaskAttachmentsSection(st.id); });
 }
 
 // Suffixe de conteneur DOM pour un rôle RACI. editAssignees -> 'assignee' (et non
