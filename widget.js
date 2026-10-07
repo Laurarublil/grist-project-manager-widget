@@ -1140,6 +1140,16 @@ function getTaskSubtasks(taskId) {
     });
 }
 
+// Sous-tâches rattachées à une tâche dans les vues : uniquement celles
+// assignées à la personne filtrée quand le filtre Personne est actif
+// (la tâche parente reste visible, avec zéro sous-tâche le cas échéant).
+function getVisibleTaskSubtasks(taskId) {
+  var list = getTaskSubtasks(taskId);
+  if (!currentFilterAssignee) return list;
+  var identSet = personIdentSet(currentFilterAssignee);
+  return list.filter(function(st) { return assigneeListHas(st.Assignee, identSet); });
+}
+
 function getTaskProgress(task) {
   var taskSubtasks = getTaskSubtasks(task.id);
   if (taskSubtasks.length === 0) {
@@ -3721,7 +3731,7 @@ function renderCalendarDayView() {
     html += '<div class="day-empty">' + (currentLang === 'fr' ? 'Aucune tâche ce jour' : 'No tasks today') + '</div>';
   } else {
     dayTasks.forEach(function(task) {
-      var taskSubtasks = getTaskSubtasks(task.id);
+      var taskSubtasks = getVisibleTaskSubtasks(task.id);
       var completedSt = taskSubtasks.filter(function(st) { return st.Completed; }).length;
       var stColor = statusColors[task.Status] || '#94a3b8';
       var dueThisDay = task.Due_Date && task.Due_Date >= dayStartTs && task.Due_Date <= dayEndTs;
@@ -3951,7 +3961,7 @@ function renderKanbanView() {
 function renderTaskCard(task) {
   var cd = cardDisplaySettings;
   var overdueHtml = isOverdue(task) ? ' <span class="overdue-badge">' + t('overdue') + '</span>' : '';
-  var taskSubtasks = getTaskSubtasks(task.id);
+  var taskSubtasks = getVisibleTaskSubtasks(task.id);
   var progressPct = getTaskProgress(task);
   var completedCount = taskSubtasks.filter(function(st) { return st.Completed; }).length;
   var blocked = isTaskBlocked(task.id);
@@ -4327,7 +4337,7 @@ function renderTableView() {
     var overdueHtml = isOverdue(task) ? ' ⚠️' : '';
     var dotClass = task.Priority === 'high' ? 'dot-high' : (task.Priority === 'medium' ? 'dot-medium' : 'dot-low');
 
-    var taskSubtasks = getTaskSubtasks(task.id);
+    var taskSubtasks = getVisibleTaskSubtasks(task.id);
     var completedSt = taskSubtasks.filter(function(st) { return st.Completed; }).length;
 
     var taskProjColor = getProjectColor(task.Project_Id);
@@ -4510,7 +4520,7 @@ function toggleGanttSubtasks(taskId) {
 
 // Sous-tâches du Gantt : seulement celles avec une Due_Date (sinon impossible à positionner)
 function getGanttSubtasks(taskId) {
-  return getTaskSubtasks(taskId).filter(function(st) { return st.Due_Date; });
+  return getVisibleTaskSubtasks(taskId).filter(function(st) { return st.Due_Date; });
 }
 
 // Construit la <td> de libellé d'une sous-tâche (indentée, allégée, cliquable)
