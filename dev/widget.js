@@ -3188,7 +3188,11 @@ function getFilteredTasks() {
   }
   if (currentFilterAssignee) {
     var identSet = personIdentSet(currentFilterAssignee);
-    result = result.filter(function(t) { return assigneeListHas(t.Assignee, identSet); });
+    result = result.filter(function(t) {
+      if (assigneeListHas(t.Assignee, identSet)) return true;
+      // La tâche parente reste visible si une de ses sous-tâches est assignée à la personne
+      return getTaskSubtasks(t.id).some(function(st) { return assigneeListHas(st.Assignee, identSet); });
+    });
   }
   if (currentFilterCategory) {
     var catKey = String(currentFilterCategory).trim();
