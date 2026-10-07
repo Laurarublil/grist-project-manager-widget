@@ -6435,6 +6435,8 @@ function openEditTaskModal(taskId, preserveAssignees) {
       var stBlocker = getSubtaskBlocker(st);
       var stDueDateStr = st.Due_Date ? new Date(st.Due_Date * 1000).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
       var stDueClass = (st.Due_Date && !st.Completed && st.Due_Date < Math.floor(Date.now() / 1000)) ? ' st-overdue' : '';
+      var dodList = getDoD(st);
+      var dodDone = dodList.filter(function(d) { return d.done; }).length;
       html += '<div class="subtask-item' + (st.Completed ? ' completed' : '') + (stBlocked ? ' blocked' : '') + '" data-id="' + st.id + '" id="st-row-' + st.id + '">';
       // Normal view
       html += '<div class="subtask-view" id="st-view-' + st.id + '">';
@@ -6460,27 +6462,11 @@ function openEditTaskModal(taskId, preserveAssignees) {
       }
       if (stDueDateStr) html += '<span class="subtask-due-badge' + stDueClass + '">📅 ' + stDueDateStr + '</span>';
       if (st.Estimated_Hours) html += '<span class="subtask-assignee-badge">⏱ ' + st.Estimated_Hours + 'h</span>';
+      if (dodList.length > 0) html += '<span class="subtask-assignee-badge" title="' + t('definitionOfDone') + '">☑️ ' + dodDone + '/' + dodList.length + '</span>';
       html += '</span>';
       html += '<button class="subtask-edit-btn" onclick="startEditSubtask(' + st.id + ', ' + task.id + ')" title="' + t('editSubtask') + '">✏️</button>';
       html += '<button class="subtask-delete" onclick="deleteSubtask(' + st.id + ', ' + task.id + ')" title="' + t('delete') + '">✕</button>';
       html += '</div>';
-      // Definition of Done : critères de complétion de la sous-tâche
-      var dodList = getDoD(st);
-      if (dodList.length > 0) {
-        var dodDone = dodList.filter(function(d) { return d.done; }).length;
-        html += '<div class="subtask-dod">';
-        html += '<div class="subtask-dod-label">' + t('definitionOfDone') + ' <span class="dod-count">' + dodDone + '/' + dodList.length + '</span></div>';
-        html += '<div class="subtask-dod-list' + (dodDone === dodList.length ? ' dod-all-done' : '') + '">';
-        dodList.forEach(function(d, di) {
-          html += '<div class="dod-item">';
-          html += '<input type="checkbox" class="dod-checkbox"' + (d.done ? ' checked' : '') + ' onchange="toggleDoD(' + st.id + ', ' + di + ', this.checked)" />';
-          html += '<input type="text" class="dod-text" value="' + sanitize(d.text || '') + '" onchange="renameDoD(' + st.id + ', ' + di + ', this)" />';
-          html += '<button type="button" class="dod-delete" onclick="deleteDoD(' + st.id + ', ' + di + ')" title="' + t('delete') + '">✕</button>';
-          html += '</div>';
-        });
-        html += '</div>';
-        html += '</div>';
-      }
       // Edit view (hidden by default)
       // Assignés multiples : liste de cases à cocher (comme les tâches, séparés par virgule)
       var stAssignees = (st.Assignee || '').split(',').map(function(a) { return a.trim(); }).filter(Boolean);
@@ -6550,8 +6536,25 @@ function openEditTaskModal(taskId, preserveAssignees) {
       html += '<input type="date" class="subtask-edit-date" id="st-due-' + st.id + '" value="' + stDueDateInput + '" title="' + (currentLang === 'fr' ? 'Échéance' : 'Due date') + '">';
       html += '<input type="number" class="st-hours-input" id="st-hours-' + st.id + '" value="' + (st.Estimated_Hours || '') + '" placeholder="' + (currentLang === 'fr' ? 'Heures' : 'Hours') + '" min="0" step="0.5">';
       html += '</div>';
-      // Definition of Done : ajout de critère (remplace la récurrence)
-      html += '<button type="button" class="dod-add-btn" style="width:100%;" onclick="addDoD(' + st.id + ')">➕ ' + t('addCriterion') + '</button>';
+      // Definition of Done : critères en bas du formulaire d'édition
+      html += '<div class="subtask-dod">';
+      html += '<div class="subtask-dod-label">' + t('definitionOfDone') + (dodList.length > 0 ? ' <span class="dod-count">' + dodDone + '/' + dodList.length + '</span>' : '') + '</div>';
+      if (dodList.length > 0) {
+        html += '<div class="subtask-dod-list' + (dodDone === dodList.length ? ' dod-all-done' : '') + '">';
+        dodList.forEach(function(d, di) {
+          html += '<div class="dod-item">';
+          html += '<input type="checkbox" class="dod-checkbox"' + (d.done ? ' checked' : '') + ' onchange="toggleDoD(' + st.id + ', ' + di + ', this.checked)" />';
+          html += '<input type="text" class="dod-text" value="' + sanitize(d.text || '') + '" onchange="renameDoD(' + st.id + ', ' + di + ', this)" />';
+          html += '<button type="button" class="dod-delete" onclick="deleteDoD(' + st.id + ', ' + di + ')" title="' + t('delete') + '">✕</button>';
+          html += '</div>';
+        });
+        html += '</div>';
+      }
+      html += '</div>';
+      html += '<div class="st-dod-add-row">';
+      html += '<input type="text" id="st-dod-new-' + st.id + '" class="st-dod-add-input" placeholder="' + (currentLang === 'fr' ? 'Saisir un critère...' : 'Enter a criterion...') + '" onkeypress="if(event.key===\'Enter\'){event.preventDefault();addDoDFromInput(' + st.id + ')}">';
+      html += '<button type="button" class="dod-add-btn" onclick="addDoDFromInput(' + st.id + ')" title="' + t('addCriterion') + '">➕</button>';
+      html += '</div>';
       // Actions
       html += '<div class="st-form-actions">';
       html += '<button type="button" class="subtask-cancel-btn" onclick="cancelEditSubtask(' + st.id + ')">' + (currentLang === 'fr' ? 'Annuler' : 'Cancel') + '</button>';
@@ -7236,15 +7239,24 @@ async function applyDoDUpdate(subtask, dodList) {
   }
 }
 
-async function addDoD(subtaskId) {
+async function addDoD(subtaskId, criterionText) {
   var subtask = subtasks.find(function(st) { return st.id === subtaskId; });
   if (!subtask) return;
   var dodList = copyDoD(subtask);
   // Nouveau critère créé décoché : si la sous-tâche était terminée, elle
   // repasse en cours (la complétion est dérivée du DoD).
-  dodList.push({ text: t('newCriterion'), done: false });
+  dodList.push({ text: (criterionText && criterionText.trim()) ? criterionText.trim() : t('newCriterion'), done: false });
   await applyDoDUpdate(subtask, dodList);
   showToast(t('dodCriterionAdded'), 'info');
+}
+
+// Ajout d'un critere depuis le champ texte du formulaire d'edition de sous-tache
+function addDoDFromInput(subtaskId) {
+  var input = document.getElementById('st-dod-new-' + subtaskId);
+  if (!input) return;
+  var text = input.value;
+  if (!text || !text.trim()) { input.focus(); return; }
+  addDoD(subtaskId, text).then(function() { input.value = ''; input.focus(); });
 }
 
 async function toggleDoD(subtaskId, index, done) {
