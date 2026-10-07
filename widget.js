@@ -6646,6 +6646,19 @@ function openEditTaskModal(taskId, preserveAssignees) {
       html += '<input type="date" class="subtask-edit-date" id="st-due-' + st.id + '" value="' + stDueDateInput + '" title="' + (currentLang === 'fr' ? 'Échéance' : 'Due date') + '">';
       html += '<input type="number" class="st-hours-input" id="st-hours-' + st.id + '" value="' + (st.Estimated_Hours || '') + '" placeholder="' + (currentLang === 'fr' ? 'Heures' : 'Hours') + '" min="0" step="0.5">';
       html += '</div>';
+      // Dépendance entre sous-tâches (bloquée par une autre sous-tâche de la tâche)
+      var stOtherSubtasks = taskSubtasks.filter(function(s2) { return s2.id !== st.id; });
+      if (stOtherSubtasks.length > 0) {
+        html += '<div>';
+        html += '<div class="st-pill-label">🔗 ' + t('blockedBy') + '</div>';
+        html += '<select id="st-dep-' + st.id + '" class="st-dep-select" onchange="setSubtaskDependency(' + st.id + ', ' + task.id + ', this.value)">';
+        html += '<option value="">-- ' + t('noDependencies') + ' --</option>';
+        stOtherSubtasks.forEach(function(s2) {
+          html += '<option value="' + s2.id + '"' + (st.Blocked_By_Subtask_Id === s2.id ? ' selected' : '') + '>' + sanitize(s2.Title) + '</option>';
+        });
+        html += '</select>';
+        html += '</div>';
+      }
       // Definition of Done : critères en bas du formulaire d'édition
       html += '<div class="subtask-dod">';
       html += '<div class="subtask-dod-label">' + t('definitionOfDone') + (dodList.length > 0 ? ' <span class="dod-count">' + dodDone + '/' + dodList.length + '</span>' : '') + '</div>';
@@ -7092,6 +7105,27 @@ async function updateSubtaskDep(subtaskId, taskId) {
     closeModalForce();
     await loadAllData();
     openEditTaskModal(taskId);
+  } catch (e) {
+    console.error('Error updating subtask dependency:', e);
+    showToast('Error: ' + e.message, 'error');
+  }
+}
+
+// Dépendance entre sous-tâches : met à jour Blocked_By_Subtask_Id depuis le
+// sélecteur du formulaire d'édition, puis rouvre le formulaire (saisie préservée).
+async function setSubtaskDependency(subtaskId, parentTaskId, blockerId) {
+  var val = blockerId ? parseInt(blockerId) : null;
+  var stFormState = snapshotSubtaskForm(subtaskId);
+  try {
+    await grist.docApi.applyUserActions([
+      ['UpdateRecord', SUBTASKS_TABLE, subtaskId, { Blocked_By_Subtask_Id: val }]
+    ]);
+    showToast(val ? t('dependencyAdded') : t('noDependencies'), 'info');
+    await loadAllData();
+    openEditTaskModal(parentTaskId, true);
+    if (stFormState) restoreSubtaskForm(subtaskId, stFormState);
+    var depSel = document.getElementById('st-dep-' + subtaskId);
+    if (depSel) depSel.focus();
   } catch (e) {
     console.error('Error updating subtask dependency:', e);
     showToast('Error: ' + e.message, 'error');

@@ -2588,6 +2588,19 @@
     }
     .st-meta-row select:focus,
     .subtask-edit-date:focus { border-color: #6366f1; }
+    .st-dep-select {
+      width: 100%;
+      padding: 5px 8px;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      font-size: 12px;
+      font-family: inherit;
+      background: #fff;
+      color: inherit;
+      outline: none;
+      cursor: pointer;
+    }
+    .st-dep-select:focus { border-color: #6366f1; }
     .st-hours-input {
       width: 72px;
       padding: 5px 8px;
@@ -2633,6 +2646,7 @@
     body.dark-mode .st-meta-row select,
     body.dark-mode .subtask-edit-select,
     body.dark-mode .subtask-edit-date,
+    body.dark-mode .st-dep-select { background: #0f172a; border-color: #334155; color: #e2e8f0; }
     body.dark-mode .st-hours-input { background: #0f172a; border-color: #334155; color: #e2e8f0; }
     body.dark-mode .st-pill { border-color: #334155; color: #94a3b8; }
     body.dark-mode .st-pill:hover { border-color: #475569; color: #e2e8f0; }
@@ -4054,20 +4068,6 @@
       font-size: 10px;
       color: #64748b;
     }
-
-    /* ========== RESPONSIVE ========== */
-    @media (max-width: 768px) {
-      .stats-row { grid-template-columns: repeat(2, 1fr); }
-      .kanban-column { min-width: 220px; flex: 1 0 220px; }
-      .form-row { grid-template-columns: 1fr; }
-      .header-row { flex-direction: column; align-items: flex-start; }
-    }
-
-    /* ========== FOOTER ========== */
-    .app-footer {
-      text-align: center;
-      padding: 16px;
-      font-size: 11px;
 </style>
 </head>
 <body>
@@ -4179,6 +4179,15 @@
                 <input type="date" class="subtask-edit-date" id="st-start-102" value="2026-10-01" title="Date début">
                 <input type="date" class="subtask-edit-date" id="st-due-102" value="2026-10-05" title="Échéance">
                 <input type="number" class="st-hours-input" id="st-hours-102" value="8" placeholder="Heures" min="0" step="0.5">
+              </div>
+
+              <!-- Dépendance entre sous-tâches -->
+              <div>
+                <div class="st-pill-label">🔗 Bloquée par</div>
+                <select id="st-dep-102" class="st-dep-select">
+                  <option value="">-- Aucune dépendance --</option>
+                  <option value="101">Rédiger le cahier des charges</option>
+                </select>
               </div>
 
               <!-- Definition of Done : en bas du formulaire -->
