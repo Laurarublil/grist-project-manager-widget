@@ -6468,7 +6468,7 @@ function openEditTaskModal(taskId, preserveAssignees) {
       html += '</div>';
       // Definition of Done en vue affichage : cases à cocher modifiables, sans ajout ni suppression
       if (dodList.length > 0) {
-        html += '<div class="subtask-dod" id="st-view-dod-' + st.id + '">';
+        html += '<div class="subtask-dod subtask-dod-view" id="st-view-dod-' + st.id + '">';
         html += '<div class="subtask-dod-label">' + t('definitionOfDone') + ' <span class="dod-count">' + dodDone + '/' + dodList.length + '</span></div>';
         html += '<div class="subtask-dod-list' + (dodDone === dodList.length ? ' dod-all-done' : '') + '">';
         dodList.forEach(function(d, di) {
