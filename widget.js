@@ -1425,7 +1425,7 @@ function getTaskTimeEntries(taskId) {
 var ATTACH_MAX_BYTES = 5 * 1024 * 1024; // limite pratique par fichier (~5 Mo)
 
 function getTaskAttachments(taskId) {
-  return attachments.filter(function(a) { return a.Task_Id === taskId; })
+  return attachments.filter(function(a) { return a.Task_Id === taskId && !a.Subtask_Id; })
     .sort(function(a, b) { return (a.Created_At || 0) - (b.Created_At || 0); });
 }
 
