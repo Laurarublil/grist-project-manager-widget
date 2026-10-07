@@ -2269,6 +2269,7 @@
 
     /* ========== DEFINITION OF DONE (DoD) ========== */
     .subtask-dod { margin-top: 6px; }
+    .subtask-dod-view { align-self: flex-end; width: fit-content; max-width: 100%; text-align: left; }
     .subtask-dod-label {
       font-size: 10px; font-weight: 600; color: #94a3b8;
       text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;
@@ -2364,7 +2365,8 @@
     }
     .subtask-item {
       display: flex;
-      align-items: center;
+      flex-direction: column;
+      align-items: stretch;
       gap: 8px;
       padding: 8px 10px;
       background: white;
@@ -2479,7 +2481,6 @@
       display: flex;
       align-items: center;
       gap: 8px;
-      flex: 1;
       min-width: 0;
     }
     .subtask-meta {

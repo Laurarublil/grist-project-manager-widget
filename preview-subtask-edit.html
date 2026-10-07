@@ -2255,6 +2255,7 @@
 
     /* ========== DEFINITION OF DONE (DoD) ========== */
     .subtask-dod { margin-top: 6px; }
+    .subtask-dod-view { align-self: flex-end; width: fit-content; max-width: 100%; text-align: left; }
     .subtask-dod-label {
       font-size: 10px; font-weight: 600; color: #94a3b8;
       text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;
@@ -2276,6 +2277,8 @@
       font-size: 12px; padding: 2px 4px; outline: none; min-width: 0;
     }
     .dod-text:focus { background: #fff; border-radius: 4px; box-shadow: 0 0 0 1px #3b82f6; }
+    .dod-text-view { flex: 1; color: #475569; font-size: 12px; padding: 2px 4px; min-width: 0; }
+    .dod-text-view.dod-text-done { text-decoration: line-through; color: #94a3b8; }
     .dod-delete {
       width: 18px; height: 18px; border: none; background: transparent;
       color: #cbd5e1; cursor: pointer; border-radius: 4px; font-size: 11px;
@@ -2300,6 +2303,8 @@
     body.dark-mode .dod-item:hover { background: #334155; }
     body.dark-mode .dod-text { color: #e2e8f0; }
     body.dark-mode .dod-text:focus { background: #0f172a; }
+    body.dark-mode .dod-text-view { color: #e2e8f0; }
+    body.dark-mode .dod-text-view.dod-text-done { color: #64748b; }
     body.dark-mode .subtask-dod-list { border-left-color: #334155; }
     body.dark-mode .subtask-dod-list.dod-all-done { border-left-color: #4ade80; }
     body.dark-mode .subtask-dod-label { color: #94a3b8; }
@@ -2346,7 +2351,8 @@
     }
     .subtask-item {
       display: flex;
-      align-items: center;
+      flex-direction: column;
+      align-items: stretch;
       gap: 8px;
       padding: 8px 10px;
       background: white;
@@ -2461,7 +2467,6 @@
       display: flex;
       align-items: center;
       gap: 8px;
-      flex: 1;
       min-width: 0;
     }
     .subtask-meta {
@@ -4063,11 +4068,6 @@
       text-align: center;
       padding: 16px;
       font-size: 11px;
-      color: #94a3b8;
-      border-top: 1px solid #e2e8f0;
-      margin-top: 20px;
-    }
-    .app-footer a { color: #ef4444; text-decoration: none; }
 </style>
 </head>
 <body>
@@ -4101,7 +4101,7 @@
               <button class="subtask-delete" title="Supprimer">✕</button>
             </div>
             <!-- DoD en vue affichage : cases a cocher modifiables, pas d'ajout ni suppression -->
-            <div class="subtask-dod" id="st-view-dod-101">
+            <div class="subtask-dod subtask-dod-view" id="st-view-dod-101">
               <div class="subtask-dod-label">Definition of Done <span class="dod-count">3/3</span></div>
               <div class="subtask-dod-list dod-all-done">
                 <div class="dod-item"><input type="checkbox" class="dod-checkbox" checked /><span class="dod-text-view dod-text-done">Structure validée</span></div>
