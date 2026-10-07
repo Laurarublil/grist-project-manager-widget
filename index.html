@@ -2303,6 +2303,13 @@
       font-size: 11px; cursor: pointer; transition: all 0.15s;
     }
     .dod-add-btn:hover { border-color: #3b82f6; color: #3b82f6; background: #eff6ff; }
+    .st-dod-add-row { display: flex; gap: 6px; align-items: center; margin-top: 6px; }
+    .st-dod-add-row .dod-add-btn { flex-shrink: 0; padding: 3px 8px; }
+    .st-dod-add-input {
+      flex: 1; min-width: 0; padding: 4px 8px;
+      border: 1px solid #e2e8f0; border-radius: 6px; font-size: 12px;
+    }
+    .st-dod-add-input:focus { outline: none; border-color: #3b82f6; }
     body.dark-mode .dod-item { background: #1e293b; }
     body.dark-mode .dod-item:hover { background: #334155; }
     body.dark-mode .dod-text { color: #e2e8f0; }
@@ -2314,6 +2321,8 @@
     body.dark-mode .dod-delete { color: #475569; }
     body.dark-mode .dod-delete:hover { background: #450a0a; color: #fca5a5; }
     body.dark-mode .dod-add-btn { border-color: #475569; color: #94a3b8; }
+    body.dark-mode .st-dod-add-input { background: #0f172a; border-color: #475569; color: #e2e8f0; }
+    body.dark-mode .st-dod-add-input:focus { border-color: #818cf8; }
     body.dark-mode .dod-add-btn:hover { border-color: #818cf8; color: #818cf8; background: #1e3a5f; }
 
     .subtasks-section {
