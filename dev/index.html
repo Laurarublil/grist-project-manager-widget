@@ -1738,6 +1738,11 @@
       opacity: 0.85;
       border: 1px dashed rgba(255,255,255,0.5);
     }
+    /* Dépendance entre sous-tâches non satisfaite : barre hachurée rouge */
+    .gantt-bar-st-blocked {
+      background-image: repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(239,68,68,0.4) 4px, rgba(239,68,68,0.4) 8px) !important;
+      border: 1.5px solid #ef4444 !important;
+    }
     /* B2 : jalon rendu en losange (date unique) */
     .gantt-bar-milestone {
       background: #7c3aed !important;
