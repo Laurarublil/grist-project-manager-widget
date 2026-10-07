@@ -228,6 +228,13 @@ var i18n = {
     subtaskSaved: 'Sous-tâche modifiée',
     editSubtask: 'Modifier la sous-tâche',
     subtaskAssignee: 'Responsable',
+    definitionOfDone: 'Definition of Done',
+    addCriterion: 'Ajouter un critère',
+    newCriterion: 'Nouveau critère',
+    dodCriterionAdded: 'Critère DoD ajouté',
+    dodCriterionDeleted: 'Critère DoD supprimé',
+    dodCriterionUpdated: 'Critère DoD mis à jour',
+    dodIncomplete: 'DoD incomplet : cochez tous les critères pour terminer la sous-tâche',
     subtaskDueDate: 'Échéance',
     noAssignee: 'Non assigné',
     dependencies: 'Dépendances',
@@ -570,6 +577,13 @@ var i18n = {
     subtaskSaved: 'Subtask updated',
     editSubtask: 'Edit subtask',
     subtaskAssignee: 'Assignee',
+    definitionOfDone: 'Definition of Done',
+    addCriterion: 'Add criterion',
+    newCriterion: 'New criterion',
+    dodCriterionAdded: 'DoD criterion added',
+    dodCriterionDeleted: 'DoD criterion deleted',
+    dodCriterionUpdated: 'DoD criterion updated',
+    dodIncomplete: 'Incomplete DoD: check all criteria to complete the subtask',
     subtaskDueDate: 'Due date',
     noAssignee: 'Unassigned',
     dependencies: 'Dependencies',
@@ -1126,6 +1140,16 @@ function getTaskSubtasks(taskId) {
     });
 }
 
+// Sous-tâches rattachées à une tâche dans les vues : uniquement celles
+// assignées à la personne filtrée quand le filtre Personne est actif
+// (la tâche parente reste visible, avec zéro sous-tâche le cas échéant).
+function getVisibleTaskSubtasks(taskId) {
+  var list = getTaskSubtasks(taskId);
+  if (!currentFilterAssignee) return list;
+  var identSet = personIdentSet(currentFilterAssignee);
+  return list.filter(function(st) { return assigneeListHas(st.Assignee, identSet); });
+}
+
 function getTaskProgress(task) {
   var taskSubtasks = getTaskSubtasks(task.id);
   if (taskSubtasks.length === 0) {
@@ -1401,7 +1425,7 @@ function getTaskTimeEntries(taskId) {
 var ATTACH_MAX_BYTES = 5 * 1024 * 1024; // limite pratique par fichier (~5 Mo)
 
 function getTaskAttachments(taskId) {
-  return attachments.filter(function(a) { return a.Task_Id === taskId; })
+  return attachments.filter(function(a) { return a.Task_Id === taskId && !a.Subtask_Id; })
     .sort(function(a, b) { return (a.Created_At || 0) - (b.Created_At || 0); });
 }
 
@@ -1509,11 +1533,12 @@ function downloadAttachment(recordId) {
   document.body.removeChild(a);
 }
 
-async function deleteAttachment(recordId, taskId) {
+async function deleteAttachment(recordId, taskId, subtaskId) {
   if (!confirm(currentLang === 'fr' ? 'Supprimer cette pièce jointe ?' : 'Delete this attachment?')) return;
   try {
     await grist.docApi.applyUserActions([['RemoveRecord', ATTACHMENTS_TABLE, recordId]]);
     await loadAllData();
+    if (subtaskId) renderSubtaskAttachmentsSection(subtaskId);
     renderAttachmentsSection(taskId);
     if (typeof refreshAllViews === 'function') refreshAllViews();
   } catch (e) {
@@ -1560,8 +1585,7 @@ function renderAttachmentsSection(taskId) {
     html = '<div class="attach-empty">' + (currentLang === 'fr' ? 'Aucune pièce jointe' : 'No attachments') + '</div>';
   } else {
     list.forEach(function(att) {
-      var isImg = attachmentIsImage(att.File_Type, att.File_Name);
-      var icon = isImg ? '🖼️' : (attachmentIsPdf(att.File_Type, att.File_Name) ? '📄' : '📎');
+      var icon = attachmentIcon(att.File_Type, att.File_Name);
       html += '<div class="attach-item">';
       html += '<span class="attach-icon">' + icon + '</span>';
       html += '<span class="attach-name" onclick="viewAttachment(' + att.id + ')" title="' + (currentLang === 'fr' ? 'Voir' : 'View') + '">' + sanitize(att.File_Name) + '</span>';
@@ -1573,6 +1597,86 @@ function renderAttachmentsSection(taskId) {
   }
   container.innerHTML = html;
 }
+
+// Icône d'une pièce jointe selon son type (image, PDF, Word, PPT, XLS...)
+function attachmentIcon(type, name) {
+  if (attachmentIsImage(type, name)) return '🖼️';
+  if (attachmentIsPdf(type, name)) return '📄';
+  if (/\.(docx?|rtf|odt)$/i.test(name || '')) return '📝';
+  if (/\.(pptx?|odp)$/i.test(name || '')) return '📊';
+  if (/\.(xlsx?|csv|ods)$/i.test(name || '')) return '📈';
+  return '📎';
+}
+
+// Pièces jointes d'une sous-tâche : même table PM_Attachments, colonne Subtask_Id
+function getSubtaskAttachments(subtaskId) {
+  return attachments.filter(function(a) { return a.Subtask_Id === subtaskId; })
+    .sort(function(a, b) { return (a.Created_At || 0) - (b.Created_At || 0); });
+}
+
+// Upload de fichiers (base64) pour une sous-tâche
+async function uploadSubtaskAttachments(subtaskId, parentTaskId, fileList) {
+  if (!fileList || !fileList.length) return;
+  var statusEl = document.getElementById('st-attach-status-' + subtaskId);
+  try {
+    var addedCount = 0, skipped = [];
+    for (var i = 0; i < fileList.length; i++) {
+      var file = fileList[i];
+      if (statusEl) statusEl.textContent = (currentLang === 'fr' ? 'Traitement de ' : 'Processing ') + file.name + '...';
+      var dataUrl = attachmentIsImage(file.type, file.name)
+        ? await compressImageFile(file)
+        : await readFileAsDataURL(file);
+      if (!dataUrl) { skipped.push(file.name); continue; }
+      var approxBytes = Math.round(dataUrl.length * 0.75);
+      if (approxBytes > ATTACH_MAX_BYTES) { skipped.push(file.name + ' (' + formatFileSize(approxBytes) + ')'); continue; }
+      await grist.docApi.applyUserActions([
+        ['AddRecord', ATTACHMENTS_TABLE, null, {
+          Task_Id: parentTaskId,
+          Subtask_Id: subtaskId,
+          File_Name: file.name,
+          File_Type: file.type || '',
+          File_Size: file.size || 0,
+          File_Data: dataUrl,
+          Created_At: Math.floor(Date.now() / 1000)
+        }]
+      ]);
+      addedCount++;
+    }
+    if (statusEl) statusEl.textContent = '';
+    await loadAllData();
+    renderSubtaskAttachmentsSection(subtaskId);
+    if (typeof refreshAllViews === 'function') refreshAllViews();
+    if (addedCount > 0) showToast((currentLang === 'fr' ? 'Pièce(s) jointe(s) ajoutée(s) : ' : 'Attachment(s) added: ') + addedCount, 'success');
+    if (skipped.length) showToast((currentLang === 'fr' ? 'Trop volumineux (max 5 Mo), ignoré : ' : 'Too large (max 5MB), skipped: ') + skipped.join(', '), 'error');
+  } catch (e) {
+    console.error('[GristPM] uploadSubtaskAttachments error:', e);
+    if (statusEl) statusEl.textContent = '';
+    showToast((currentLang === 'fr' ? 'Échec : ' : 'Failed: ') + e.message, 'error');
+  }
+}
+
+// (Re)construit la liste des pièces jointes d'une sous-tâche dans son formulaire d'édition
+function renderSubtaskAttachmentsSection(subtaskId) {
+  var container = document.getElementById('st-attachments-list-' + subtaskId);
+  if (!container) return;
+  var list = getSubtaskAttachments(subtaskId);
+  var html = '';
+  if (list.length === 0) {
+    html = '<div class="attach-empty">' + (currentLang === 'fr' ? 'Aucune pièce jointe' : 'No attachments') + '</div>';
+  } else {
+    list.forEach(function(att) {
+      html += '<div class="attach-item">';
+      html += '<span class="attach-icon">' + attachmentIcon(att.File_Type, att.File_Name) + '</span>';
+      html += '<span class="attach-name" onclick="viewAttachment(' + att.id + ')" title="' + (currentLang === 'fr' ? 'Voir' : 'View') + '">' + sanitize(att.File_Name) + '</span>';
+      html += '<span class="attach-size">' + formatFileSize(att.File_Size) + '</span>';
+      html += '<button class="attach-btn" onclick="downloadAttachment(' + att.id + ')" title="' + (currentLang === 'fr' ? 'Télécharger' : 'Download') + '">⬇️</button>';
+      if (isOwner) html += '<button class="attach-btn" onclick="deleteAttachment(' + att.id + ', 0, ' + subtaskId + ')" title="' + t('delete') + '">🗑️</button>';
+      html += '</div>';
+    });
+  }
+  container.innerHTML = html;
+}
+
 
 function getTaskTotalTime(taskId) {
   var entries = getTaskTimeEntries(taskId);
@@ -1918,19 +2022,21 @@ async function ensureTables() {
           { id: 'File_Name', type: 'Text' },
           { id: 'File_Type', type: 'Text' },
           { id: 'File_Size', type: 'Int' },
+          { id: 'Subtask_Id', type: 'Int' },
           { id: 'File_Data', type: 'Text' },
           { id: 'Created_At', type: 'DateTime' }
         ]]
       ]);
     } else {
-      // Migration : ajouter File_Data si la table existe déjà (ancienne version avec colonne Attachments)
+      // Migration : ajouter File_Data et Subtask_Id si la table existe déjà
       try {
         var attCols = Object.keys(await grist.docApi.fetchTable(ATTACHMENTS_TABLE));
-        if (attCols.indexOf('File_Data') === -1) {
-          await grist.docApi.applyUserActions([['AddColumn', ATTACHMENTS_TABLE, 'File_Data', { type: 'Text' }]]);
-        }
+        var attMig = [];
+        if (attCols.indexOf('File_Data') === -1) attMig.push(['AddColumn', ATTACHMENTS_TABLE, 'File_Data', { type: 'Text' }]);
+        if (attCols.indexOf('Subtask_Id') === -1) attMig.push(['AddColumn', ATTACHMENTS_TABLE, 'Subtask_Id', { type: 'Int' }]);
+        if (attMig.length) await grist.docApi.applyUserActions(attMig);
       } catch (mig) {
-        console.log('[GristPM] Migration File_Data ignorée :', mig.message);
+        console.log('[GristPM] Migration pièces jointes ignorée :', mig.message);
       }
     }
 
@@ -2172,6 +2278,10 @@ async function ensureTables() {
         if (stCols.indexOf('Type') === -1) {
           stActions.push(['AddColumn', SUBTASKS_TABLE, 'Type', { type: 'Choice', widgetOptions: JSON.stringify({ choices: ['subtask', 'milestone'] }) }]);
         }
+        // Definition of Done : critères de complétion (JSON [{ text, done }])
+        if (stCols.indexOf('DefinitionOfDone') === -1) {
+          stActions.push(['AddColumn', SUBTASKS_TABLE, 'DefinitionOfDone', { type: 'Text' }]);
+        }
         if (stActions.length > 0) {
           await grist.docApi.applyUserActions(stActions);
         }
@@ -2336,6 +2446,17 @@ async function loadAllData() {
     subtasks = [];
     if (subtaskData && subtaskData.id) {
       for (var i = 0; i < subtaskData.id.length; i++) {
+        // Definition of Done : JSON [{ text, done }], parsing tolérant
+        var dodRaw = subtaskData.DefinitionOfDone ? subtaskData.DefinitionOfDone[i] : null;
+        var dodList = [];
+        if (dodRaw) {
+          try {
+            var dodParsed = typeof dodRaw === 'string' ? JSON.parse(dodRaw) : dodRaw;
+            if (Array.isArray(dodParsed)) dodList = dodParsed;
+          } catch (e) {
+            console.warn('Invalid DefinitionOfDone for subtask ' + subtaskData.id[i], e);
+          }
+        }
         subtasks.push({
           id: subtaskData.id[i],
           Parent_Task_Id: subtaskData.Parent_Task_Id ? subtaskData.Parent_Task_Id[i] : null,
@@ -2352,7 +2473,8 @@ async function loadAllData() {
           Estimated_Hours: subtaskData.Estimated_Hours ? subtaskData.Estimated_Hours[i] : null,
           Recurrence: subtaskData.Recurrence ? subtaskData.Recurrence[i] : 'none',
           Type: subtaskData.Type ? subtaskData.Type[i] : 'subtask',
-          Created_At: subtaskData.Created_At ? subtaskData.Created_At[i] : null
+          Created_At: subtaskData.Created_At ? subtaskData.Created_At[i] : null,
+          DefinitionOfDone: dodList
         });
       }
     }
@@ -2403,6 +2525,7 @@ async function loadAllData() {
         attachments.push({
           id: attData.id[i],
           Task_Id: attData.Task_Id ? attData.Task_Id[i] : null,
+          Subtask_Id: attData.Subtask_Id ? attData.Subtask_Id[i] : null,
           File_Name: attData.File_Name ? attData.File_Name[i] : '',
           File_Type: attData.File_Type ? attData.File_Type[i] : '',
           File_Size: attData.File_Size ? attData.File_Size[i] : 0,
@@ -3158,7 +3281,11 @@ function getFilteredTasks() {
   }
   if (currentFilterAssignee) {
     var identSet = personIdentSet(currentFilterAssignee);
-    result = result.filter(function(t) { return assigneeListHas(t.Assignee, identSet); });
+    result = result.filter(function(t) {
+      if (assigneeListHas(t.Assignee, identSet)) return true;
+      // La tâche parente reste visible si une de ses sous-tâches est assignée à la personne
+      return getTaskSubtasks(t.id).some(function(st) { return assigneeListHas(st.Assignee, identSet); });
+    });
   }
   if (currentFilterCategory) {
     var catKey = String(currentFilterCategory).trim();
@@ -3687,7 +3814,7 @@ function renderCalendarDayView() {
     html += '<div class="day-empty">' + (currentLang === 'fr' ? 'Aucune tâche ce jour' : 'No tasks today') + '</div>';
   } else {
     dayTasks.forEach(function(task) {
-      var taskSubtasks = getTaskSubtasks(task.id);
+      var taskSubtasks = getVisibleTaskSubtasks(task.id);
       var completedSt = taskSubtasks.filter(function(st) { return st.Completed; }).length;
       var stColor = statusColors[task.Status] || '#94a3b8';
       var dueThisDay = task.Due_Date && task.Due_Date >= dayStartTs && task.Due_Date <= dayEndTs;
@@ -3710,7 +3837,7 @@ function renderCalendarDayView() {
         html += '<div class="day-subtasks">';
         taskSubtasks.forEach(function(st) {
           html += '<div class="day-subtask-item">';
-          html += '<input type="checkbox" ' + (st.Completed ? 'checked' : '') + ' onclick="event.stopPropagation();toggleSubtask(' + st.id + ', ' + !st.Completed + ')" />';
+          html += '<input type="checkbox" ' + (st.Completed ? 'checked' : '') + ' onclick="event.stopPropagation();toggleSubtask(' + st.id + ', ' + !st.Completed + ', this)" />';
           html += '<span class="' + (st.Completed ? 'st-done' : '') + '">' + sanitize(st.Title) + '</span>';
           if (st.Assignee) html += '<span class="day-st-assignee">👤 ' + sanitize(st.Assignee) + '</span>';
           html += '</div>';
@@ -3794,13 +3921,26 @@ function toggleCardExpand(taskId, ev) {
 }
 
 // Cocher/décocher une sous-tâche depuis le panneau déplié d'une tuile
-async function toggleSubtaskFromCard(subtaskId, completed) {
+async function toggleSubtaskFromCard(subtaskId, completed, el) {
+  var subtask = subtasks.find(function(st) { return st.id === subtaskId; });
+  // Definition of Done : complétion manuelle bloquée tant que des critères restent décochés
+  if (subtask && getDoD(subtask).length > 0 && completed && !isDoDFulfilled(subtask)) {
+    showToast(t('dodIncomplete'), 'warning');
+    if (el) el.checked = false;
+    return;
+  }
   try {
+    var fields = { Completed: completed };
+    var clearedDoD = null;
+    if (subtask && !completed && getDoD(subtask).length > 0) {
+      clearedDoD = copyDoD(subtask).map(function(d) { d.done = false; return d; });
+      fields.DefinitionOfDone = JSON.stringify(clearedDoD);
+    }
     await grist.docApi.applyUserActions([
-      ['UpdateRecord', SUBTASKS_TABLE, subtaskId, { Completed: completed }]
+      ['UpdateRecord', SUBTASKS_TABLE, subtaskId, fields]
     ]);
     for (var i = 0; i < subtasks.length; i++) {
-      if (subtasks[i].id === subtaskId) { subtasks[i].Completed = completed; break; }
+      if (subtasks[i].id === subtaskId) { subtasks[i].Completed = completed; if (clearedDoD) subtasks[i].DefinitionOfDone = clearedDoD; break; }
     }
     renderKanbanView();
   } catch (e) {
@@ -3904,7 +4044,7 @@ function renderKanbanView() {
 function renderTaskCard(task) {
   var cd = cardDisplaySettings;
   var overdueHtml = isOverdue(task) ? ' <span class="overdue-badge">' + t('overdue') + '</span>' : '';
-  var taskSubtasks = getTaskSubtasks(task.id);
+  var taskSubtasks = getVisibleTaskSubtasks(task.id);
   var progressPct = getTaskProgress(task);
   var completedCount = taskSubtasks.filter(function(st) { return st.Completed; }).length;
   var blocked = isTaskBlocked(task.id);
@@ -4034,7 +4174,7 @@ function renderTaskCard(task) {
     if (taskSubtasks.length > 0) {
       html += '<div class="tcd-section"><div class="tcd-label">' + (_fr ? 'Sous-tâches' : 'Subtasks') + ' (' + completedCount + '/' + taskSubtasks.length + ')</div>';
       taskSubtasks.forEach(function(st) {
-        html += '<label class="tcd-subtask"><input type="checkbox" ' + (st.Completed ? 'checked' : '') + ' onclick="event.stopPropagation();toggleSubtaskFromCard(' + st.id + ', this.checked)">';
+        html += '<label class="tcd-subtask"><input type="checkbox" ' + (st.Completed ? 'checked' : '') + ' onclick="event.stopPropagation();toggleSubtaskFromCard(' + st.id + ', this.checked, this)">';
         html += '<span' + (st.Completed ? ' style="text-decoration:line-through;color:#94a3b8;"' : '') + '>' + sanitize(st.Title) + '</span>';
         if (st.Due_Date) html += '<span class="tcd-st-date">📅 ' + formatDate(st.Due_Date) + '</span>';
         html += '</label>';
@@ -4280,7 +4420,7 @@ function renderTableView() {
     var overdueHtml = isOverdue(task) ? ' ⚠️' : '';
     var dotClass = task.Priority === 'high' ? 'dot-high' : (task.Priority === 'medium' ? 'dot-medium' : 'dot-low');
 
-    var taskSubtasks = getTaskSubtasks(task.id);
+    var taskSubtasks = getVisibleTaskSubtasks(task.id);
     var completedSt = taskSubtasks.filter(function(st) { return st.Completed; }).length;
 
     var taskProjColor = getProjectColor(task.Project_Id);
@@ -4320,7 +4460,7 @@ function renderTableView() {
       var stOverdue = st.Due_Date && !st.Completed && st.Due_Date < _nowSec;
       // Colonne Tâche (titre)
       var stMilestoneMark = (st.Type === 'milestone') ? '<span title="Jalon" style="color:#7c3aed;margin-right:3px;">◆</span>' : '';
-      html += '<td><div class="subtask-indent"><span class="subtask-arrow">└</span><input type="checkbox" class="subtask-checkbox" ' + (st.Completed ? 'checked' : '') + ' onclick="event.stopPropagation();toggleSubtask(' + st.id + ', ' + !st.Completed + ')" style="cursor:pointer;width:14px;height:14px;margin-right:6px;flex-shrink:0;" />' + stMilestoneMark + '<span class="subtask-name' + (st.Completed ? ' completed' : '') + '">' + sanitize(st.Title) + '</span></div></td>';
+      html += '<td><div class="subtask-indent"><span class="subtask-arrow">└</span><input type="checkbox" class="subtask-checkbox" ' + (st.Completed ? 'checked' : '') + ' onclick="event.stopPropagation();toggleSubtask(' + st.id + ', ' + !st.Completed + ', this)" style="cursor:pointer;width:14px;height:14px;margin-right:6px;flex-shrink:0;" />' + stMilestoneMark + '<span class="subtask-name' + (st.Completed ? ' completed' : '') + '">' + sanitize(st.Title) + '</span></div></td>';
       // Projet (vide : hérité du parent)
       html += '<td></td>';
       // Statut (couleur réelle du statut personnalisé)
@@ -4463,23 +4603,29 @@ function toggleGanttSubtasks(taskId) {
 
 // Sous-tâches du Gantt : seulement celles avec une Due_Date (sinon impossible à positionner)
 function getGanttSubtasks(taskId) {
-  return getTaskSubtasks(taskId).filter(function(st) { return st.Due_Date; });
+  return getVisibleTaskSubtasks(taskId).filter(function(st) { return st.Due_Date; });
 }
 
-// Construit la <td> de libellé d'une sous-tâche (indentée, allégée, cliquable)
+// Construit la <td> de libellé d'une sous-tâche (indentée, allégée, cliquable).
+// La dépendance (et les méta) sont sur une 2e ligne sous le titre : la colonne
+// de 220px avec overflow:hidden rognait l'indicateur placé après le titre.
 function renderGanttSubtaskLabelCell(st, parentTaskId) {
   var completedClass = st.Completed ? ' style="text-decoration:line-through;opacity:0.5;"' : '';
   var html = '<td class="gantt-task-label gantt-subtask-cell gantt-clickable-label" onclick="openEditTaskModal(' + parentTaskId + ')"' + completedClass + '>';
+  html += '<span style="display:block;white-space:normal;overflow-wrap:break-word;" title="' + sanitize(st.Title) + '">';
   html += '<span style="font-size:10px;color:#94a3b8;margin-right:4px;">' + (isMilestone(st) ? '◆' : '↳') + '</span>';
   html += '<span style="font-size:11px;' + (isMilestone(st) ? 'font-weight:700;' : '') + '">' + sanitize(st.Title) + '</span>';
-  // A1 : indicateur de dépendance entre sous-tâches
+  html += '</span>';
+  // A1 : indicateur de dépendance entre sous-tâches (2e ligne, toujours visible)
+  var meta = '';
   var stBlocker = getSubtaskBlocker(st);
   if (stBlocker) {
     var depColor = stBlocker.Completed ? '#94a3b8' : '#ef4444';
-    html += '<span style="font-size:9px;color:' + depColor + ';margin-left:6px;white-space:nowrap;" title="' + (currentLang === 'fr' ? 'Dépend de' : 'Depends on') + ' : ' + sanitize(stBlocker.Title) + '">🔗 ' + sanitize(stBlocker.Title).substring(0, 14) + '</span>';
+    meta += '<span style="font-size:9px;color:' + depColor + ';" title="' + (currentLang === 'fr' ? 'Dépend de' : 'Depends on') + ' : ' + sanitize(stBlocker.Title) + '">🔗 ' + sanitize(stBlocker.Title) + '</span>';
   }
-  if (st.Due_Date) html += '<span style="font-size:9px;color:#94a3b8;margin-left:6px;">📅 ' + formatDate(st.Due_Date) + '</span>';
-  if (st.Assignee) html += '<span style="font-size:9px;color:#94a3b8;margin-left:4px;">👤 ' + sanitize(st.Assignee).split(',')[0].trim().substring(0, 10) + '</span>';
+  if (st.Due_Date) meta += '<span style="font-size:9px;color:#94a3b8;margin-left:6px;">📅 ' + formatDate(st.Due_Date) + '</span>';
+  if (st.Assignee) meta += '<span style="font-size:9px;color:#94a3b8;margin-left:4px;">👤 ' + sanitize(st.Assignee).split(',')[0].trim().substring(0, 10) + '</span>';
+  if (meta) html += '<span style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px;">' + meta + '</span>';
   html += '</td>';
   return html;
 }
@@ -4493,7 +4639,9 @@ function ganttSubtaskBarClass(st, parentTask) {
   if (st.Completed) base = 'gantt-bar-done';
   else if (parentTask.Status === 'progress') base = 'gantt-bar-progress';
   else base = 'gantt-bar-todo';
-  return base + (isMilestone(st) ? ' gantt-bar-milestone' : '');
+  var cls = base + (isMilestone(st) ? ' gantt-bar-milestone' : '');
+  if (isSubtaskBlocked(st)) cls += ' gantt-bar-st-blocked';   // dépendance non satisfaite
+  return cls;
 }
 
 // Bornes de la sous-tâche. B2 : un jalon est une date unique (Due_Date) → start = end.
@@ -4633,7 +4781,65 @@ function ganttCenterOnToday() {
   container.scrollLeft = Math.max(0, col.offsetLeft + col.offsetWidth / 2 - labelW - visible / 2);
 }
 
+// Flèches de dépendance entre sous-tâches : calque SVG posé sur le Gantt après
+// le rendu, à partir des positions réelles des barres (attribut data-stbar).
+// Tracé finish-to-start : bord droit de la barre bloqueuse -> bord gauche de
+// la barre dépendante, rouge si le bloqueur n'est pas terminé, gris sinon.
+function drawSubtaskDependencyArrows() {
+  var container = document.querySelector('#gantt-view .gantt-container');
+  if (!container) return;
+  var old = document.getElementById('gantt-st-deps-svg');
+  if (old && old.parentNode === container) container.removeChild(old);
+  var cRect = container.getBoundingClientRect();
+  var svgNS = 'http://www.w3.org/2000/svg';
+  var overlay = document.createElementNS(svgNS, 'svg');
+  overlay.setAttribute('id', 'gantt-st-deps-svg');
+  overlay.setAttribute('width', container.scrollWidth);
+  overlay.setAttribute('height', container.scrollHeight);
+  overlay.style.cssText = 'position:absolute;top:0;left:0;pointer-events:none;z-index:20;overflow:visible;';
+  var count = 0;
+  subtasks.forEach(function(st) {
+    if (!st.Blocked_By_Subtask_Id) return;
+    var depBar = container.querySelector('[data-stbar="' + st.id + '"]');
+    var blockerBar = container.querySelector('[data-stbar="' + st.Blocked_By_Subtask_Id + '"]');
+    var blocker = subtasks.find(function(s2) { return s2.id === st.Blocked_By_Subtask_Id; });
+    if (!depBar || !blockerBar || !blocker) return;
+    var r1 = blockerBar.getBoundingClientRect();   // fin de la barre bloqueuse
+    var r2 = depBar.getBoundingClientRect();       // début de la barre dépendante
+    var x1 = r1.right - cRect.left + container.scrollLeft;
+    var y1 = r1.top + r1.height / 2 - cRect.top + container.scrollTop;
+    var x2 = r2.left - cRect.left + container.scrollLeft;
+    var y2 = r2.top + r2.height / 2 - cRect.top + container.scrollTop;
+    if (y1 === y2) return;                          // même ligne : rien à relier
+    var color = blocker.Completed ? '#94a3b8' : '#ef4444';
+    var dir = x2 >= x1 ? 1 : -1;
+    var midX = x1 + 8;
+    if (dir === 1 && midX > x2 - 8) midX = (x1 + x2) / 2;
+    var stopX = x2 - 7 * dir;
+    var path = document.createElementNS(svgNS, 'path');
+    path.setAttribute('d', 'M ' + x1 + ' ' + y1 + ' L ' + midX + ' ' + y1 + ' L ' + midX + ' ' + y2 + ' L ' + stopX + ' ' + y2);
+    path.setAttribute('fill', 'none');
+    path.setAttribute('stroke', color);
+    path.setAttribute('stroke-width', '1.5');
+    path.setAttribute('opacity', '0.9');
+    overlay.appendChild(path);
+    var head = document.createElementNS(svgNS, 'polygon');
+    head.setAttribute('points', x2 + ',' + y2 + ' ' + (x2 + 7 * dir) + ',' + (y2 - 4) + ' ' + (x2 + 7 * dir) + ',' + (y2 + 4));
+    head.setAttribute('fill', color);
+    overlay.appendChild(head);
+    var dot = document.createElementNS(svgNS, 'circle');
+    dot.setAttribute('cx', x1);
+    dot.setAttribute('cy', y1);
+    dot.setAttribute('r', '2.5');
+    dot.setAttribute('fill', color);
+    overlay.appendChild(dot);
+    count++;
+  });
+  if (count > 0) container.appendChild(overlay);
+}
+
 function ganttAfterRender() {
+  drawSubtaskDependencyArrows();
   if (!ganttPendingCenter) return;
   ganttPendingCenter = false;
   requestAnimationFrame(function() { ganttCenterOnToday(); });
@@ -4794,7 +5000,7 @@ function renderGanttView() {
           for (var wi2 = 0; wi2 < weeks.length; wi2++) {
             html += '<td class="gantt-cell' + (wi2 === wTodayIdx ? ' today-col' : '') + '" style="position:relative;min-width:' + weekColW + 'px;">';
             if (stGeom && wi2 === stGeom.idx) {
-              html += '<div class="gantt-bar gantt-bar-subtask ' + stBarClass + '" style="left:' + stGeom.left + 'px;width:' + stGeom.width + 'px;cursor:pointer;" title="' + sanitize(st.Title) + '" onclick="openEditTaskModal(' + task.id + ')"></div>';
+              html += '<div class="gantt-bar gantt-bar-subtask ' + stBarClass + '" data-stbar="' + st.id + '" style="left:' + stGeom.left + 'px;width:' + stGeom.width + 'px;cursor:pointer;" title="' + sanitize(st.Title) + '" onclick="openEditTaskModal(' + task.id + ')"></div>';
             }
             html += '</td>';
           }
@@ -4921,7 +5127,7 @@ function renderGanttView() {
             html += '<td class="gantt-cell" style="position:relative;min-width:' + colWidth + 'px;">';
             if (ym3 === stYStart) {
               var stYW = (stYEnd - stYStart + 1) * colWidth;
-              html += '<div class="gantt-bar gantt-bar-subtask ' + stBarClass + '" style="left:2px;width:' + stYW + 'px;cursor:pointer;" title="' + sanitize(st.Title) + '" onclick="openEditTaskModal(' + task.id + ')"></div>';
+              html += '<div class="gantt-bar gantt-bar-subtask ' + stBarClass + '" data-stbar="' + st.id + '" style="left:2px;width:' + stYW + 'px;cursor:pointer;" title="' + sanitize(st.Title) + '" onclick="openEditTaskModal(' + task.id + ')"></div>';
             }
             html += '</td>';
           }
@@ -5019,7 +5225,7 @@ function renderGanttView() {
               html += '<div style="position:absolute;top:0;bottom:0;left:' + todayDayPct + '%;width:2px;background:#ef4444;z-index:1;pointer-events:none;"></div>';
             }
             if (stGeom && m2 === stGeom.idx) {
-              html += '<div class="gantt-bar gantt-bar-subtask ' + stBarClass + '" style="left:' + stGeom.left + 'px;width:' + stGeom.width + 'px;cursor:pointer;" title="' + sanitize(st.Title) + '" onclick="openEditTaskModal(' + task.id + ')"></div>';
+              html += '<div class="gantt-bar gantt-bar-subtask ' + stBarClass + '" data-stbar="' + st.id + '" style="left:' + stGeom.left + 'px;width:' + stGeom.width + 'px;cursor:pointer;" title="' + sanitize(st.Title) + '" onclick="openEditTaskModal(' + task.id + ')"></div>';
             }
             html += '</td>';
           }
@@ -5181,7 +5387,7 @@ function renderGanttView() {
           if (di2 === stBarStartIdx) {
             var stSpanDays = stBarEndIdx - stBarStartIdx + 1;
             var stWidth = stSpanDays * 36;
-            html += '<div class="gantt-bar gantt-bar-subtask ' + stBarClass + '" style="left:2px;width:' + stWidth + 'px;cursor:pointer;" title="' + sanitize(st.Title) + '" onclick="openEditTaskModal(' + task.id + ')"></div>';
+            html += '<div class="gantt-bar gantt-bar-subtask ' + stBarClass + '" data-stbar="' + st.id + '" style="left:2px;width:' + stWidth + 'px;cursor:pointer;" title="' + sanitize(st.Title) + '" onclick="openEditTaskModal(' + task.id + ')"></div>';
           }
           html += '</td>';
         }
@@ -6392,10 +6598,12 @@ function openEditTaskModal(taskId, preserveAssignees) {
       var stBlocker = getSubtaskBlocker(st);
       var stDueDateStr = st.Due_Date ? new Date(st.Due_Date * 1000).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
       var stDueClass = (st.Due_Date && !st.Completed && st.Due_Date < Math.floor(Date.now() / 1000)) ? ' st-overdue' : '';
+      var dodList = getDoD(st);
+      var dodDone = dodList.filter(function(d) { return d.done; }).length;
       html += '<div class="subtask-item' + (st.Completed ? ' completed' : '') + (stBlocked ? ' blocked' : '') + '" data-id="' + st.id + '" id="st-row-' + st.id + '">';
       // Normal view
       html += '<div class="subtask-view" id="st-view-' + st.id + '">';
-      html += '<input type="checkbox" class="subtask-checkbox" ' + (st.Completed ? 'checked' : '') + (stBlocked ? ' disabled' : '') + ' onchange="toggleSubtask(' + st.id + ', this.checked)" />';
+      html += '<input type="checkbox" class="subtask-checkbox" ' + (st.Completed ? 'checked' : '') + (stBlocked ? ' disabled' : '') + ' onchange="toggleSubtask(' + st.id + ', this.checked, this)" />';
       html += '<span class="subtask-title">' + sanitize(st.Title) + '</span>';
       if (stBlocked && stBlocker) {
         html += '<span class="subtask-blocked-badge" title="' + t('blockedBy') + ' ' + sanitize(stBlocker.Title) + '">🔒</span>';
@@ -6417,18 +6625,24 @@ function openEditTaskModal(taskId, preserveAssignees) {
       }
       if (stDueDateStr) html += '<span class="subtask-due-badge' + stDueClass + '">📅 ' + stDueDateStr + '</span>';
       if (st.Estimated_Hours) html += '<span class="subtask-assignee-badge">⏱ ' + st.Estimated_Hours + 'h</span>';
-      if (st.Recurrence && st.Recurrence !== 'none') {
-        var recSymbol = recurrenceSymbol(st.Recurrence);
-        html += '<span class="subtask-assignee-badge" title="' + t('recurrence') + '">'+  recSymbol + '</span>';
-      }
       html += '</span>';
-      if (st.Recurrence && st.Recurrence !== 'none') {
-        html += '<button class="subtask-dep-btn" onclick="generateSubtaskOccurrences(' + st.id + ', ' + task.id + ')" title="' + t('generateMonth') + '">📅+</button>';
-      }
       html += '<button class="subtask-edit-btn" onclick="startEditSubtask(' + st.id + ', ' + task.id + ')" title="' + t('editSubtask') + '">✏️</button>';
-      html += '<button class="subtask-dep-btn" onclick="openSubtaskDepModal(' + st.id + ', ' + task.id + ')" title="' + t('dependencies') + '">🔗</button>';
       html += '<button class="subtask-delete" onclick="deleteSubtask(' + st.id + ', ' + task.id + ')" title="' + t('delete') + '">✕</button>';
       html += '</div>';
+      // Definition of Done en vue affichage : cases à cocher modifiables, sans ajout ni suppression
+      if (dodList.length > 0) {
+        html += '<div class="subtask-dod subtask-dod-view" id="st-view-dod-' + st.id + '">';
+        html += '<div class="subtask-dod-label">' + t('definitionOfDone') + ' <span class="dod-count">' + dodDone + '/' + dodList.length + '</span></div>';
+        html += '<div class="subtask-dod-list' + (dodDone === dodList.length ? ' dod-all-done' : '') + '">';
+        dodList.forEach(function(d, di) {
+          html += '<div class="dod-item">';
+          html += '<input type="checkbox" class="dod-checkbox"' + (d.done ? ' checked' : '') + ' onchange="toggleDoD(' + st.id + ', ' + di + ', this.checked)" />';
+          html += '<span class="dod-text-view' + (d.done ? ' dod-text-done' : '') + '">' + sanitize(d.text || '') + '</span>';
+          html += '</div>';
+        });
+        html += '</div>';
+        html += '</div>';
+      }
       // Edit view (hidden by default)
       // Assignés multiples : liste de cases à cocher (comme les tâches, séparés par virgule)
       var stAssignees = (st.Assignee || '').split(',').map(function(a) { return a.trim(); }).filter(Boolean);
@@ -6455,9 +6669,9 @@ function openEditTaskModal(taskId, preserveAssignees) {
       // B2 : type (sous-tâche / jalon)
       var stType = st.Type || 'subtask';
       html += '<div><div class="st-pill-label">' + (currentLang === 'fr' ? 'Type' : 'Type') + '</div>';
-      html += '<div class="st-pill-group">';
-      html += '<button type="button" class="st-pill' + (stType !== 'milestone' ? ' active-progress' : '') + '" onclick="setStType(' + st.id + ',\'subtask\',this)">' + (currentLang === 'fr' ? '↳ Sous-tâche' : '↳ Subtask') + '</button>';
-      html += '<button type="button" class="st-pill' + (stType === 'milestone' ? ' active-progress' : '') + '" onclick="setStType(' + st.id + ',\'milestone\',this)">' + (currentLang === 'fr' ? '◆ Jalon (1 date)' : '◆ Milestone (1 date)') + '</button>';
+      html += '<div class="st-pill-group" id="st-type-group-' + st.id + '">';
+      html += '<button type="button" class="st-pill' + (stType !== 'milestone' ? ' active-progress' : '') + '" data-key="subtask" onclick="setStType(' + st.id + ',\'subtask\',this)">' + (currentLang === 'fr' ? '↳ Sous-tâche' : '↳ Subtask') + '</button>';
+      html += '<button type="button" class="st-pill' + (stType === 'milestone' ? ' active-progress' : '') + '" data-key="milestone" onclick="setStType(' + st.id + ',\'milestone\',this)">' + (currentLang === 'fr' ? '◆ Jalon (1 date)' : '◆ Milestone (1 date)') + '</button>';
       html += '</div>';
       html += '<input type="hidden" id="st-type-' + st.id + '" value="' + stType + '">';
       html += '</div>';
@@ -6468,7 +6682,7 @@ function openEditTaskModal(taskId, preserveAssignees) {
       getKanbanStatuses().forEach(function(s) {
         var sLbl = (s.emoji ? s.emoji + ' ' : '') + (currentLang === 'fr' ? s.label_fr : s.label_en);
         var sActiveStyle = (stStatus === s.key) ? ('background:' + (s.color || '#3b82f6') + ';color:#fff;border-color:' + (s.color || '#3b82f6') + ';') : '';
-        html += '<button type="button" class="st-pill" style="' + sActiveStyle + '" onclick="setStStatus(' + st.id + ',\'' + s.key + '\',this)">' + sanitize(sLbl) + '</button>';
+        html += '<button type="button" class="st-pill" style="' + sActiveStyle + '" data-key="' + s.key + '" onclick="setStStatus(' + st.id + ',\'' + s.key + '\',this)">' + sanitize(sLbl) + '</button>';
       });
       html += '</div>';
       html += '<input type="hidden" id="st-status-' + st.id + '" value="' + stStatus + '">';
@@ -6478,7 +6692,7 @@ function openEditTaskModal(taskId, preserveAssignees) {
       html += '<div class="st-pill-label">' + (currentLang === 'fr' ? 'Priorité' : 'Priority') + '</div>';
       html += '<div class="st-pill-group" id="st-priority-group-' + st.id + '">';
       ['high','medium','low'].forEach(function(p) {
-        html += '<button type="button" class="st-pill' + (stPriority === p ? ' active-' + p : '') + '" onclick="setStPill(\'priority\',' + st.id + ',\'' + p + '\',this)">' + prLbl[p] + '</button>';
+        html += '<button type="button" class="st-pill' + (stPriority === p ? ' active-' + p : '') + '" data-key="' + p + '" onclick="setStPill(\'priority\',' + st.id + ',\'' + p + '\',this)">' + prLbl[p] + '</button>';
       });
       html += '</div>';
       html += '<input type="hidden" id="st-priority-' + st.id + '" value="' + stPriority + '">';
@@ -6498,19 +6712,46 @@ function openEditTaskModal(taskId, preserveAssignees) {
       html += '<input type="date" class="subtask-edit-date" id="st-due-' + st.id + '" value="' + stDueDateInput + '" title="' + (currentLang === 'fr' ? 'Échéance' : 'Due date') + '">';
       html += '<input type="number" class="st-hours-input" id="st-hours-' + st.id + '" value="' + (st.Estimated_Hours || '') + '" placeholder="' + (currentLang === 'fr' ? 'Heures' : 'Hours') + '" min="0" step="0.5">';
       html += '</div>';
-      // Recurrence
-      var stRecur = st.Recurrence || 'none';
-      html += '<div style="display:flex;align-items:center;gap:8px;margin-top:6px;">';
-      html += '<span style="font-size:11px;color:#64748b;">🔄 ' + (currentLang === 'fr' ? 'Récurrence' : 'Recurrence') + '</span>';
-      html += '<select id="st-recur-' + st.id + '" style="flex:1;font-size:12px;">';
-      html += '<option value="none"' + (stRecur === 'none' ? ' selected' : '') + '>' + t('recurrenceNone') + '</option>';
-      html += '<option value="daily"' + (stRecur === 'daily' ? ' selected' : '') + '>' + t('recurrenceDaily') + '</option>';
-      html += '<option value="weekly"' + (stRecur === 'weekly' ? ' selected' : '') + '>' + t('recurrenceWeekly') + '</option>';
-      html += '<option value="biweekly"' + (stRecur === 'biweekly' ? ' selected' : '') + '>' + t('recurrenceBiweekly') + '</option>';
-      html += '<option value="monthly"' + (stRecur === 'monthly' ? ' selected' : '') + '>' + t('recurrenceMonthly') + '</option>';
-      html += '<option value="quarterly"' + (stRecur === 'quarterly' ? ' selected' : '') + '>' + t('recurrenceQuarterly') + '</option>';
-      html += '<option value="yearly"' + (stRecur === 'yearly' ? ' selected' : '') + '>' + t('recurrenceYearly') + '</option>';
-      html += '</select>';
+      // Dépendance entre sous-tâches (bloquée par une autre sous-tâche de la tâche)
+      var stOtherSubtasks = taskSubtasks.filter(function(s2) { return s2.id !== st.id; });
+      if (stOtherSubtasks.length > 0) {
+        html += '<div>';
+        html += '<div class="st-pill-label">🔗 ' + t('blockedBy') + '</div>';
+        html += '<select id="st-dep-' + st.id + '" class="st-dep-select" onchange="setSubtaskDependency(' + st.id + ', ' + task.id + ', this.value)">';
+        html += '<option value="">-- ' + t('noDependencies') + ' --</option>';
+        stOtherSubtasks.forEach(function(s2) {
+          html += '<option value="' + s2.id + '"' + (st.Blocked_By_Subtask_Id === s2.id ? ' selected' : '') + '>' + sanitize(s2.Title) + '</option>';
+        });
+        html += '</select>';
+        html += '</div>';
+      }
+      // Definition of Done : critères en bas du formulaire d'édition
+      html += '<div class="subtask-dod">';
+      html += '<div class="subtask-dod-label">' + t('definitionOfDone') + (dodList.length > 0 ? ' <span class="dod-count">' + dodDone + '/' + dodList.length + '</span>' : '') + '</div>';
+      if (dodList.length > 0) {
+        html += '<div class="subtask-dod-list' + (dodDone === dodList.length ? ' dod-all-done' : '') + '">';
+        dodList.forEach(function(d, di) {
+          html += '<div class="dod-item">';
+          html += '<input type="checkbox" class="dod-checkbox"' + (d.done ? ' checked' : '') + ' onchange="toggleDoD(' + st.id + ', ' + di + ', this.checked)" />';
+          html += '<input type="text" class="dod-text" value="' + sanitize(d.text || '') + '" onchange="renameDoD(' + st.id + ', ' + di + ', this)" />';
+          html += '<button type="button" class="dod-delete" onclick="deleteDoD(' + st.id + ', ' + di + ')" title="' + t('delete') + '">✕</button>';
+          html += '</div>';
+        });
+        html += '</div>';
+      }
+      html += '</div>';
+      html += '<div class="st-dod-add-row">';
+      html += '<input type="text" id="st-dod-new-' + st.id + '" class="st-dod-add-input" placeholder="' + (currentLang === 'fr' ? 'Saisir un critère...' : 'Enter a criterion...') + '" onkeypress="if(event.key===\'Enter\'){event.preventDefault();addDoDFromInput(' + st.id + ')}">';
+      html += '<button type="button" class="dod-add-btn" onclick="addDoDFromInput(' + st.id + ')" title="' + t('addCriterion') + '">➕</button>';
+      html += '</div>';
+      // Pièces jointes de la sous-tâche (Word, PDF, PPT, XLS...)
+      html += '<div class="subtask-attach">';
+      html += '<div class="subtask-dod-label">' + (currentLang === 'fr' ? 'Pièces jointes' : 'Attachments') + ' <span class="dod-count">' + getSubtaskAttachments(st.id).length + '</span></div>';
+      html += '<div class="attachments-list" id="st-attachments-list-' + st.id + '"></div>';
+      html += '<div class="attach-add-row">';
+      html += '<label class="attach-upload-btn" style="font-size:11px;padding:4px 12px;">📎 ' + (currentLang === 'fr' ? 'Ajouter un fichier' : 'Add file') + '<input type="file" multiple accept=".doc,.docx,.pdf,.ppt,.pptx,.xls,.xlsx" style="display:none;" onchange="uploadSubtaskAttachments(' + st.id + ', ' + task.id + ', Array.from(this.files)); this.value=\'\';"></label>';
+      html += '<span class="attach-status" id="st-attach-status-' + st.id + '"></span>';
+      html += '</div>';
       html += '</div>';
       // Actions
       html += '<div class="st-form-actions">';
@@ -6805,6 +7046,7 @@ function openEditTaskModal(taskId, preserveAssignees) {
   document.getElementById('modal-container').innerHTML = html;
   // D2 : remplir la liste des pièces jointes (token asynchrone à part)
   renderAttachmentsSection(task.id);
+  taskSubtasks.forEach(function(st) { renderSubtaskAttachmentsSection(st.id); });
 }
 
 // Suffixe de conteneur DOM pour un rôle RACI. editAssignees -> 'assignee' (et non
@@ -6935,6 +7177,27 @@ async function updateSubtaskDep(subtaskId, taskId) {
   }
 }
 
+// Dépendance entre sous-tâches : met à jour Blocked_By_Subtask_Id depuis le
+// sélecteur du formulaire d'édition, puis rouvre le formulaire (saisie préservée).
+async function setSubtaskDependency(subtaskId, parentTaskId, blockerId) {
+  var val = blockerId ? parseInt(blockerId) : null;
+  var stFormState = snapshotSubtaskForm(subtaskId);
+  try {
+    await grist.docApi.applyUserActions([
+      ['UpdateRecord', SUBTASKS_TABLE, subtaskId, { Blocked_By_Subtask_Id: val }]
+    ]);
+    showToast(val ? t('dependencyAdded') : t('noDependencies'), 'info');
+    await loadAllData();
+    openEditTaskModal(parentTaskId, true);
+    if (stFormState) restoreSubtaskForm(subtaskId, stFormState);
+    var depSel = document.getElementById('st-dep-' + subtaskId);
+    if (depSel) depSel.focus();
+  } catch (e) {
+    console.error('Error updating subtask dependency:', e);
+    showToast('Error: ' + e.message, 'error');
+  }
+}
+
 async function quickAction(taskId, newStatus) {
   var task = tasks.find(function(t) { return t.id === taskId; });
   var wasNotDone = task && task.Status !== 'done';
@@ -7059,23 +7322,36 @@ function restoreModalScrollTop(pos) {
   }, 50);
 }
 
-async function toggleSubtask(subtaskId, completed) {
+async function toggleSubtask(subtaskId, completed, el) {
   var savedAssignees = editAssignees.slice();
   var savedAccountable = editAccountable.slice();
   var savedConsulted = editConsulted.slice();
   var savedInformed = editInformed.slice();
   var scrollPos = getModalScrollTop();
   var _tgSt = subtasks.find(function(st){ return st.id === subtaskId; });
+  // Definition of Done : complétion manuelle bloquée tant que des critères restent décochés
+  if (_tgSt && getDoD(_tgSt).length > 0 && completed && !isDoDFulfilled(_tgSt)) {
+    showToast(t('dodIncomplete'), 'warning');
+    if (el) el.checked = false;
+    return;
+  }
   if (_tgSt) await persistTaskFormFields(_tgSt.Parent_Task_Id);   // préserve la saisie parent
   try {
     var newStatus = completed ? 'done' : 'todo';
+    var fields = { Completed: completed, Status: newStatus };
+    var clearedDoD = null;
+    if (_tgSt && !completed && getDoD(_tgSt).length > 0) {
+      clearedDoD = copyDoD(_tgSt).map(function(d) { d.done = false; return d; });
+      fields.DefinitionOfDone = JSON.stringify(clearedDoD);
+    }
     await grist.docApi.applyUserActions([
-      ['UpdateRecord', SUBTASKS_TABLE, subtaskId, { Completed: completed, Status: newStatus }]
+      ['UpdateRecord', SUBTASKS_TABLE, subtaskId, fields]
     ]);
     for (var i = 0; i < subtasks.length; i++) {
       if (subtasks[i].id === subtaskId) {
         subtasks[i].Completed = completed;
         subtasks[i].Status = newStatus;
+        if (clearedDoD) subtasks[i].DefinitionOfDone = clearedDoD;
         break;
       }
     }
@@ -7118,6 +7394,127 @@ async function deleteSubtask(subtaskId, parentTaskId) {
   }
 }
 
+// =============================================================================
+// DEFINITION OF DONE (DoD) : critères de complétion d'une sous-tâche
+// Colonne DefinitionOfDone (JSON [{ text, done }]). La sous-tâche est considérée
+// terminée uniquement quand tous les critères sont cochés.
+// =============================================================================
+
+function getDoD(subtask) {
+  return (subtask && Array.isArray(subtask.DefinitionOfDone)) ? subtask.DefinitionOfDone : [];
+}
+
+function isDoDFulfilled(subtask) {
+  var list = getDoD(subtask);
+  return list.length > 0 && list.every(function(d) { return !!d.done; });
+}
+
+function copyDoD(subtask) {
+  return getDoD(subtask).map(function(d) {
+    return { text: d.text || '', done: !!d.done };
+  });
+}
+
+// Applique la nouvelle liste de critères et dérive Completed/Status :
+// - tous les critères cochés -> Completed true / Status 'done'
+// - au moins un critère décoché (ou liste vidée) sur une sous-tâche terminée
+//   -> Completed false / Status 'progress'
+async function applyDoDUpdate(subtask, dodList, keepEditOpen) {
+  var savedAssignees = editAssignees.slice();
+  var savedAccountable = editAccountable.slice();
+  var savedConsulted = editConsulted.slice();
+  var savedInformed = editInformed.slice();
+  var scrollPos = getModalScrollTop();
+  var stFormState = keepEditOpen ? snapshotSubtaskForm(subtask.id) : null;
+  await persistTaskFormFields(subtask.Parent_Task_Id);   // préserve la saisie parent en cours
+  var allDone = dodList.length > 0 && dodList.every(function(d) { return d.done; });
+  var fields = { DefinitionOfDone: dodList.length > 0 ? JSON.stringify(dodList) : null };
+  var becameCompleted = false;
+  if (allDone && !subtask.Completed) {
+    fields.Completed = true;
+    fields.Status = 'done';
+    becameCompleted = true;
+  } else if (!allDone && subtask.Completed) {
+    fields.Completed = false;
+    fields.Status = 'progress';
+  }
+  try {
+    await grist.docApi.applyUserActions([
+      ['UpdateRecord', SUBTASKS_TABLE, subtask.id, fields]
+    ]);
+    subtask.DefinitionOfDone = dodList;
+    if (fields.Completed !== undefined) {
+      subtask.Completed = fields.Completed;
+      subtask.Status = fields.Status;
+    }
+    if (becameCompleted) showToast(t('subtaskCompleted'), 'success');
+    editAssignees = savedAssignees;
+    editAccountable = savedAccountable;
+    editConsulted = savedConsulted;
+    editInformed = savedInformed;
+    openEditTaskModal(subtask.Parent_Task_Id, true);
+    if (stFormState) restoreSubtaskForm(subtask.id, stFormState);
+    restoreModalScrollTop(scrollPos);
+  } catch (e) {
+    console.error('Error updating DoD:', e);
+    showToast('Error: ' + e.message, 'error');
+  }
+}
+
+async function addDoD(subtaskId, criterionText) {
+  var subtask = subtasks.find(function(st) { return st.id === subtaskId; });
+  if (!subtask) return;
+  var dodList = copyDoD(subtask);
+  // Nouveau critère créé décoché : si la sous-tâche était terminée, elle
+  // repasse en cours (la complétion est dérivée du DoD).
+  dodList.push({ text: (criterionText && criterionText.trim()) ? criterionText.trim() : t('newCriterion'), done: false });
+  await applyDoDUpdate(subtask, dodList, true);
+  showToast(t('dodCriterionAdded'), 'info');
+}
+
+// Ajout d'un critere depuis le champ texte du formulaire d'edition de sous-tache
+function addDoDFromInput(subtaskId) {
+  var input = document.getElementById('st-dod-new-' + subtaskId);
+  if (!input) return;
+  var text = input.value;
+  if (!text || !text.trim()) { input.focus(); return; }
+  addDoD(subtaskId, text);
+}
+
+async function toggleDoD(subtaskId, index, done) {
+  var subtask = subtasks.find(function(st) { return st.id === subtaskId; });
+  if (!subtask) return;
+  var dodList = copyDoD(subtask);
+  if (!dodList[index]) return;
+  dodList[index].done = !!done;
+  await applyDoDUpdate(subtask, dodList, true);
+}
+
+async function renameDoD(subtaskId, index, input) {
+  var subtask = subtasks.find(function(st) { return st.id === subtaskId; });
+  if (!subtask) return;
+  var dodList = copyDoD(subtask);
+  if (!dodList[index]) return;
+  var newText = (input.value || '').trim();
+  if (!newText) {
+    input.value = dodList[index].text;   // texte vide : restaure la valeur en base
+    return;
+  }
+  dodList[index].text = newText;
+  await applyDoDUpdate(subtask, dodList, true);
+  showToast(t('dodCriterionUpdated'), 'info');
+}
+
+async function deleteDoD(subtaskId, index) {
+  var subtask = subtasks.find(function(st) { return st.id === subtaskId; });
+  if (!subtask) return;
+  var dodList = copyDoD(subtask);
+  if (!dodList[index]) return;
+  dodList.splice(index, 1);
+  await applyDoDUpdate(subtask, dodList, true);
+  showToast(t('dodCriterionDeleted'), 'info');
+}
+
 // Toggle pill selection for status/priority
 // Sélecteur de statut de sous-tâche (statuts personnalisés avec couleur réelle)
 function setStStatus(subtaskId, value, btn) {
@@ -7156,18 +7553,75 @@ function setStPill(field, subtaskId, value, btn) {
 // Édition inline d'une sous-tâche
 function startEditSubtask(subtaskId) {
   var viewEl = document.getElementById('st-view-' + subtaskId);
+  var viewDodEl = document.getElementById('st-view-dod-' + subtaskId);
   var editEl = document.getElementById('st-edit-' + subtaskId);
   if (viewEl) viewEl.style.display = 'none';
+  if (viewDodEl) viewDodEl.style.display = 'none';
   if (editEl) { editEl.style.display = 'flex'; var t = document.getElementById('st-title-' + subtaskId); if (t) t.focus(); }
 }
 
 function cancelEditSubtask(subtaskId) {
   var viewEl = document.getElementById('st-view-' + subtaskId);
+  var viewDodEl = document.getElementById('st-view-dod-' + subtaskId);
   var editEl = document.getElementById('st-edit-' + subtaskId);
   if (viewEl) viewEl.style.display = 'flex';
+  if (viewDodEl) viewDodEl.style.display = '';
   if (editEl) editEl.style.display = 'none';
 }
 
+// Instantané du formulaire d'édition d'une sous-tâche, pour le rouvrir tel quel
+// après un re-render de la modale (ajout/modif/suppression d'un critère DoD).
+function snapshotSubtaskForm(subtaskId) {
+  var snap = null;
+  ['st-title-','st-desc-','st-type-','st-status-','st-priority-','st-start-','st-due-','st-hours-','st-assignee-search-'].forEach(function(pfx) {
+    var el = document.getElementById(pfx + subtaskId);
+    if (el) {
+      if (!snap) snap = {};
+      snap[pfx] = el.value;
+    }
+  });
+  var box = document.getElementById('st-assignee-' + subtaskId);
+  if (box) {
+    if (!snap) snap = {};
+    snap.assignees = [];
+    box.querySelectorAll('input[type="checkbox"]').forEach(function(c) {
+      if (c.checked) snap.assignees.push(c.value);
+    });
+  }
+  return snap;
+}
+
+// Rouvre le formulaire d'édition de la sous-tâche, restaure l'état figé, puis place
+// le focus sur le champ « Saisir un critère... ».
+function restoreSubtaskForm(subtaskId, snap) {
+  if (snap) startEditSubtask(subtaskId);   // formulaire fermé avant l'opération : ne pas l'ouvrir
+  if (!snap) return;
+  ['st-title-','st-desc-','st-start-','st-due-','st-hours-'].forEach(function(pfx) {
+    var el = document.getElementById(pfx + subtaskId);
+    if (el && snap[pfx] !== undefined) el.value = snap[pfx];
+  });
+  var search = document.getElementById('st-assignee-search-' + subtaskId);
+  if (search && snap['st-assignee-search-'] !== undefined) {
+    search.value = snap['st-assignee-search-'];
+    filterStAssignees(subtaskId, snap['st-assignee-search-']);
+  }
+  var box = document.getElementById('st-assignee-' + subtaskId);
+  if (box && snap.assignees) {
+    box.querySelectorAll('input[type="checkbox"]').forEach(function(c) {
+      c.checked = snap.assignees.indexOf(c.value) !== -1;
+    });
+  }
+  // Pastilles type/statut/priorité : clique le bouton correspondant pour
+  // resynchroniser le visuel et le champ caché sur la valeur figée.
+  [['st-type-group-', snap['st-type-']], ['st-status-group-', snap['st-status-']], ['st-priority-group-', snap['st-priority-']]].forEach(function(pair) {
+    if (pair[1] === undefined) return;
+    var grp = document.getElementById(pair[0] + subtaskId);
+    var btn = grp ? grp.querySelector('[data-key="' + pair[1] + '"]') : null;
+    if (btn) btn.click();
+  });
+  var dodInput = document.getElementById('st-dod-new-' + subtaskId);
+  if (dodInput) dodInput.focus();
+}
 // Filtre la liste des assignés d'une sous-tâche selon la saisie clavier
 function filterStAssignees(subtaskId, query) {
   var box = document.getElementById('st-assignee-' + subtaskId);
@@ -7188,7 +7642,6 @@ async function saveEditSubtask(subtaskId, parentTaskId) {
   var startDateInput= document.getElementById('st-start-'    + subtaskId);
   var dueDateInput  = document.getElementById('st-due-'      + subtaskId);
   var hoursInput    = document.getElementById('st-hours-'    + subtaskId);
-  var recurSel      = document.getElementById('st-recur-'    + subtaskId);
   if (!titleInput) return;
   var newTitle = titleInput.value.trim();
   if (!newTitle) return;
@@ -7201,6 +7654,16 @@ async function saveEditSubtask(subtaskId, parentTaskId) {
   var newDueDate = dueDateInput && dueDateInput.value ? Math.floor(new Date(dueDateInput.value).getTime() / 1000) : null;
   var newStatus = statusSel ? statusSel.value : 'todo';
   var typeEl = document.getElementById('st-type-' + subtaskId);
+  // Definition of Done : quand des critères existent, le statut en découle
+  var _svSt = subtasks.find(function(sv) { return sv.id === subtaskId; });
+  if (_svSt && getDoD(_svSt).length > 0) {
+    if (isDoDFulfilled(_svSt)) {
+      newStatus = 'done';
+    } else if (newStatus === 'done') {
+      newStatus = 'progress';
+      showToast(t('dodIncomplete'), 'warning');
+    }
+  }
   var fields = {
     Title: newTitle,
     Description: descInput ? descInput.value : '',
@@ -7209,7 +7672,6 @@ async function saveEditSubtask(subtaskId, parentTaskId) {
     Priority: prioritySel ? prioritySel.value : 'medium',
     Assignee: newAssignee,
     Estimated_Hours: hoursInput && hoursInput.value ? parseFloat(hoursInput.value) : null,
-    Recurrence: recurSel ? recurSel.value : 'none',
     Type: typeEl ? typeEl.value : 'subtask'
   };
   if (newStartDate) fields.Start_Date = newStartDate;

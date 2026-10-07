@@ -1,23 +1,9 @@
-<!--
-  Grist Project Manager Widget
-  Copyright 2026 Said Hamadou (isaytoo)
-  Licensed under the Apache License, Version 2.0
-  https://github.com/isaytoo/grist-project-manager-widget
--->
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-  <meta http-equiv="Pragma" content="no-cache" />
-  <meta http-equiv="Expires" content="0" />
-  <title>Gestion de Projet</title>
-  <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
-  <!-- Export PDF du Gantt (A2) -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <style>
+<meta charset="UTF-8">
+<title>Aperçu - édition sous-tâche</title>
+<style>
     /* ========== RESET & BASE ========== */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -1737,11 +1723,6 @@
       font-size: 8px;
       opacity: 0.85;
       border: 1px dashed rgba(255,255,255,0.5);
-    }
-    /* Dépendance entre sous-tâches non satisfaite : barre hachurée rouge */
-    .gantt-bar-st-blocked {
-      background-image: repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(239,68,68,0.4) 4px, rgba(239,68,68,0.4) 8px) !important;
-      border: 1.5px solid #ef4444 !important;
     }
     /* B2 : jalon rendu en losange (date unique) */
     .gantt-bar-milestone {
@@ -4087,676 +4068,174 @@
       font-size: 10px;
       color: #64748b;
     }
-
-    /* ========== RESPONSIVE ========== */
-    @media (max-width: 768px) {
-      .stats-row { grid-template-columns: repeat(2, 1fr); }
-      .kanban-column { min-width: 220px; flex: 1 0 220px; }
-      .form-row { grid-template-columns: 1fr; }
-      .header-row { flex-direction: column; align-items: flex-start; }
-    }
-
-    /* ========== FOOTER ========== */
-    .app-footer {
-      text-align: center;
-      padding: 16px;
-      font-size: 11px;
-      color: #94a3b8;
-      border-top: 1px solid #e2e8f0;
-      margin-top: 20px;
-    }
-    .app-footer a { color: #ef4444; text-decoration: none; }
-  </style>
+</style>
 </head>
 <body>
+<!-- Apercu statique : structure HTML generee par openEditTaskModal (develop@93bb014) -->
+<div class="modal-overlay" style="position:fixed;">
+  <div class="modal modal-detail" onclick="event.stopPropagation()">
+    <div class="modal-detail-content" style="grid-template-columns:1fr;">
 
-  <!-- NOT IN GRIST -->
-  <div class="not-in-grist hidden" id="not-in-grist">
-    <h2>📋 Gestion de Projet</h2>
-    <p data-i18n="notInGrist">Ce widget doit être utilisé dans Grist.</p>
-  </div>
+      <!-- ==== SECTION SOUS-TACHES ==== -->
+      <div class="subtasks-section">
+        <div class="subtasks-header">
+          <span class="detail-field-icon">☑️</span>
+          <span class="detail-field-label">Sous-tâches</span>
+          <span class="subtask-badge">1/2</span>
+        </div>
 
-  <!-- MAIN CONTENT -->
-  <div id="main-content">
+        <div class="subtasks-list" id="subtasks-list">
 
-    <!-- HEADER -->
-    <div class="app-header">
-      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
-        <div>
-          <h1>📋 <span data-i18n="appTitle">Gestion de Projet</span></h1>
-          <p data-i18n="appSubtitle">Organisez et suivez vos tâches avec le tableau Kanban ou la vue tableau</p>
-        </div>
-        <div style="display:flex;align-items:center;gap:10px;">
-          <input type="text" id="global-search" class="global-search" placeholder="Rechercher..." data-i18n-placeholder="globalSearchPlaceholder" oninput="globalSearch(this.value)" />
-          <button class="btn-icon-header" id="notifications-btn" onclick="showNotifications()" title="Alertes">🔔<span class="notif-badge" id="notif-badge"></span></button>
-          <button class="btn-icon-header" onclick="toggleDarkMode()" title="Mode sombre">🌙</button>
-          <button class="btn-icon-header" onclick="exportTasks('csv')" title="Export CSV">📥</button>
-          <div class="lang-btns">
-            <button class="lang-btn active" onclick="setLang('fr')">FR</button>
-            <button class="lang-btn" onclick="setLang('en')">EN</button>
-          </div>
-        </div>
-      </div>
-      <div class="header-row" style="margin-top:12px;">
-        <div class="tabs-bar">
-          <button class="tab-btn active" data-tab="calendar" onclick="switchTab('calendar')">📅 <span data-i18n="tabCalendar">Calendrier</span></button>
-          <button class="tab-btn" data-tab="kanban" onclick="switchTab('kanban')">📋 <span data-i18n="tabKanban">Kanban</span></button>
-          <button class="tab-btn" data-tab="table" onclick="switchTab('table')">📊 <span data-i18n="tabTable">Tableau</span></button>
-          <button class="tab-btn" data-tab="gantt" onclick="switchTab('gantt')">📐 <span data-i18n="tabGantt">Gantt</span></button>
-          <button class="tab-btn" data-tab="templates" onclick="switchTab('templates')">🎨 <span data-i18n="tabTemplates">Templates</span></button>
-          <button class="tab-btn" data-tab="stats" onclick="switchTab('stats')">📈 <span data-i18n="tabStats">Stats</span></button>
-          <button class="tab-btn" data-tab="team" onclick="switchTab('team')">👥 <span data-i18n="tabTeam">Équipe</span></button>
-          <button class="tab-btn" data-tab="settings" onclick="switchTab('settings')">⚙️ <span data-i18n="tabSettings">Paramètres</span></button>
-        </div>
-        <div style="display:flex;align-items:center;gap:10px;">
-          <div id="project-selector" class="project-selector"></div>
-          <button class="btn-new-project" onclick="openProjectModal()">+ <span data-i18n="newProject">Nouveau projet</span></button>
-          <button class="btn-new-task" onclick="openNewTaskModal()">+ <span data-i18n="newTask">Nouvelle tâche</span></button>
-        </div>
-      </div>
-    </div>
-
-    <!-- STATS (dynamically generated by updateStats()) -->
-    <div class="stats-row" id="stats-row"></div>
-
-    <!-- TAB: CALENDAR -->
-    <div class="tab-content active" id="tab-calendar">
-      <div class="calendar-container">
-        <div class="calendar-header">
-          <button class="calendar-nav-btn" onclick="calendarNav(-1)">◀</button>
-          <h2 id="calendar-month-title"></h2>
-          <button class="calendar-nav-btn" onclick="calendarNav(1)">▶</button>
-          <button class="calendar-today-btn" onclick="calendarToday()" data-i18n="calToday">Aujourd'hui</button>
-          <div class="calendar-mode-btns">
-            <button class="calendar-mode-btn active" data-mode="month" onclick="setCalendarMode('month')" data-i18n="calMonth">Mois</button>
-            <button class="calendar-mode-btn" data-mode="week" onclick="setCalendarMode('week')" data-i18n="calWeek">Semaine</button>
-            <button class="calendar-mode-btn" data-mode="day" onclick="setCalendarMode('day')" data-i18n="calDay">Jour</button>
-          </div>
-        </div>
-        <div class="calendar-grid">
-          <div class="calendar-weekdays" id="calendar-weekdays"></div>
-          <div class="calendar-days" id="calendar-days"></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- TAB: KANBAN -->
-    <div class="tab-content" id="tab-kanban">
-      <div style="display:flex;align-items:center;gap:8px;padding:8px 0 4px 0;">
-        <span style="font-size:13px;color:#64748b;">Grouper par :</span>
-        <select id="kanban-groupby" onchange="setKanbanGroupBy(this.value)" style="padding:5px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:13px;">
-          <option value="status">Statut</option>
-          <option value="priority">Priorité</option>
-          <option value="project">Projet</option>
-        </select>
-        <span style="font-size:13px;color:#64748b;margin-left:8px;">Trier :</span>
-        <select id="kanban-sort" onchange="setKanbanSort(this.value)" style="padding:5px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:13px;">
-          <option value="manual">Manuel</option>
-          <option value="alpha">A → Z</option>
-          <option value="alpha-desc">Z → A</option>
-          <option value="due">Échéance</option>
-          <option value="priority">Priorité</option>
-        </select>
-        <button id="archive-toggle-btn" class="btn btn-sm" onclick="toggleArchiveView()" style="margin-left:auto;padding:5px 12px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;background:#f8fafc;cursor:pointer;font-weight:600;">📦 Archives</button>
-      </div>
-      <div class="kanban-board" id="kanban-board"></div>
-    </div>
-
-    <!-- TAB: TABLE -->
-    <div class="tab-content" id="tab-table">
-      <div class="section-title">
-        <h2 data-i18n="tableTitle">Tableau de Gestion</h2>
-        <p data-i18n="tableSubtitle">Gérez vos tâches avec édition inline avancée</p>
-      </div>
-      <div class="table-filters">
-        <button class="btn-secondary btn-sm" onclick="expandAllSubtasks()" title="Tout déplier">⊞</button>
-        <button class="btn-secondary btn-sm" onclick="collapseAllSubtasks()" title="Tout replier">⊟</button>
-        <input type="text" id="table-search" placeholder="Rechercher une tâche..." data-i18n-placeholder="taskSearchPlaceholder" oninput="renderTableView()" />
-        <div id="ms-status" class="filter-combo"></div>
-        <div id="ms-priority" class="filter-combo"></div>
-      </div>
-      <div id="table-view"></div>
-    </div>
-
-    <!-- TAB: GANTT -->
-    <div class="tab-content" id="tab-gantt">
-      <div class="section-title">
-        <h2 data-i18n="ganttTitle">Diagramme de Gantt</h2>
-        <p id="gantt-task-count"></p>
-      </div>
-      <div class="gantt-controls">
-        <button class="btn-secondary btn-sm" onclick="ganttNav(-1)">◀</button>
-        <span data-i18n="ganttYear">Année :</span>
-        <select id="gantt-year" onchange="setGanttYear(this.value)"></select>
-        <button class="gantt-today btn-sm" onclick="ganttToday()" data-i18n="ganttToday">Aujourd'hui</button>
-        <button class="btn-secondary btn-sm" onclick="ganttNav(1)">▶</button>
-        <span style="margin-left:8px;" data-i18n="ganttSortLabel">Trier :</span>
-        <select id="gantt-sort" onchange="setGanttSort(this.value)">
-          <option value="default" data-i18n="ganttSortDefault">Défaut</option>
-          <option value="priority" data-i18n="ganttSortPriority">Priorité</option>
-          <option value="alpha" data-i18n="ganttSortAlpha">A → Z</option>
-          <option value="due" data-i18n="ganttSortDue">Échéance</option>
-        </select>
-        <div style="flex:1;"></div>
-        <div style="display:flex;gap:4px;">
-          <button class="btn-secondary btn-sm" onclick="ganttExpandAll()" title="Tout déplier">⊞</button>
-          <button class="btn-secondary btn-sm" onclick="ganttCollapseAll()" title="Tout replier">⊟</button>
-          <button class="btn-secondary btn-sm" id="gantt-fullscreen-btn" onclick="toggleGanttFullscreen()" title="Plein écran">⛶</button>
-          <button class="btn-secondary btn-sm" onclick="exportGanttPdf()" title="Export PDF" data-i18n-title="exportPdf">📄 PDF</button>
-        </div>
-        <div class="gantt-view-btns" style="display:flex;gap:4px;">
-          <button class="btn-secondary btn-sm active" onclick="setGanttMode('days')" data-gantt-mode="days" data-i18n="ganttDays">Jours</button>
-          <button class="btn-secondary btn-sm" onclick="setGanttMode('weeks')" data-gantt-mode="weeks" data-i18n="ganttWeeks">Semaines</button>
-          <button class="btn-secondary btn-sm" onclick="setGanttMode('months')" data-gantt-mode="months" data-i18n="ganttMonths">Mois</button>
-          <button class="btn-secondary btn-sm" onclick="setGanttMode('year')" data-gantt-mode="year" data-i18n="ganttYear2">Année</button>
-          <button class="btn-secondary btn-sm" onclick="setGanttMode('twoyears')" data-gantt-mode="twoyears" data-i18n="ganttTwoYears">2 Ans</button>
-          <button class="btn-secondary btn-sm" onclick="setGanttMode('custom')" data-gantt-mode="custom" data-i18n="ganttCustom">Personnalisé</button>
-        </div>
-      </div>
-      <div id="gantt-custom-range" style="display:none;align-items:center;gap:8px;padding:6px 0 0;flex-wrap:wrap;">
-        <span style="font-size:12px;color:#64748b;" data-i18n="ganttRangeFrom">Du :</span>
-        <input type="date" id="gantt-custom-start" onchange="setGanttCustomRange()" style="padding:5px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;">
-        <span style="font-size:12px;color:#64748b;" data-i18n="ganttRangeTo">au :</span>
-        <input type="date" id="gantt-custom-end" onchange="setGanttCustomRange()" style="padding:5px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;">
-      </div>
-      <div id="gantt-view"></div>
-    </div>
-
-    <!-- TAB: STATS -->
-    <div class="tab-content" id="tab-stats">
-      <div class="section-title">
-        <h2 data-i18n="statsTitle">Statistiques</h2>
-        <p data-i18n="statsSubtitle">Analysez la productivité de votre équipe</p>
-      </div>
-      <div class="stats-dashboard">
-        <div class="stats-charts-row">
-          <div class="stats-chart-card">
-            <h3>📊 <span data-i18n="chartStatus">Répartition par statut</span></h3>
-            <div class="chart-container" id="chart-status"></div>
-          </div>
-          <div class="stats-chart-card">
-            <h3>🎯 <span data-i18n="chartPriority">Répartition par priorité</span></h3>
-            <div class="chart-container" id="chart-priority"></div>
-          </div>
-        </div>
-        <div class="stats-charts-row">
-          <div class="stats-chart-card">
-            <h3>👥 <span data-i18n="chartAssignee">Tâches par assigné</span></h3>
-            <div class="chart-container" id="chart-assignee"></div>
-          </div>
-          <div class="stats-chart-card">
-            <h3>📅 <span data-i18n="chartWeek">Tâches cette semaine</span></h3>
-            <div class="chart-container" id="chart-week"></div>
-          </div>
-        </div>
-        <div class="stats-charts-row">
-          <div class="stats-chart-card" style="grid-column: span 2;">
-            <h3>⚠️ <span data-i18n="chartWorkload">Charge de travail (risque de surcharge)</span></h3>
-            <div class="workload-container" id="chart-workload"></div>
-          </div>
-        </div>
-        <div class="stats-charts-row">
-          <div class="stats-chart-card" style="grid-column: span 2;">
-            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
-              <h3 style="margin:0;">📅 <span data-i18n="chartTimeline">Charge dans le temps par agent</span></h3>
-              <div style="display:flex;gap:8px;align-items:center;">
-                <select id="timeline-period" onchange="renderTimelineChart()" style="padding:5px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;">
-                  <option value="weeks" data-i18n="byWeek8">Par semaine (8 sem.)</option>
-                  <option value="months" data-i18n="byMonth6">Par mois (6 mois)</option>
-                </select>
-                <select id="timeline-agent" onchange="renderTimelineChart()" style="padding:5px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;">
-                  <option value="" data-i18n="allAgents">Tous les agents</option>
-                </select>
+          <!-- Sous-tache 1 : mode affichage (badge DoD dans les meta) -->
+          <div class="subtask-item completed" data-id="101" id="st-row-101">
+            <div class="subtask-view" id="st-view-101">
+              <input type="checkbox" class="subtask-checkbox" checked />
+              <span class="subtask-title">Rédiger le cahier des charges</span>
+              <span class="subtask-meta">
+                <span class="subtask-assignee-badge" style="background:#22c55e20;color:#22c55e;">✅</span>
+                <span class="subtask-assignee-badge">👤 Laura</span>
+                <span class="subtask-due-badge">📅 30/09/2026</span>
+                <span class="subtask-assignee-badge">⏱ 4h</span>
+              </span>
+              <button class="subtask-edit-btn" title="Modifier la sous-tâche">✏️</button>
+              <button class="subtask-delete" title="Supprimer">✕</button>
+            </div>
+            <!-- DoD en vue affichage : cases a cocher modifiables, pas d'ajout ni suppression -->
+            <div class="subtask-dod subtask-dod-view" id="st-view-dod-101">
+              <div class="subtask-dod-label">Definition of Done <span class="dod-count">3/3</span></div>
+              <div class="subtask-dod-list dod-all-done">
+                <div class="dod-item"><input type="checkbox" class="dod-checkbox" checked /><span class="dod-text-view dod-text-done">Structure validée</span></div>
+                <div class="dod-item"><input type="checkbox" class="dod-checkbox" checked /><span class="dod-text-view dod-text-done">Périmètre défini</span></div>
+                <div class="dod-item"><input type="checkbox" class="dod-checkbox" checked /><span class="dod-text-view dod-text-done">Revue faite</span></div>
               </div>
             </div>
-            <div id="chart-timeline" style="overflow-x:auto;"></div>
           </div>
-        </div>
-        <div class="stats-charts-row">
-          <div class="stats-chart-card" style="grid-column: span 2;">
-            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
-              <h3 style="margin:0;">📉 <span data-i18n="chartBurndown">Burndown / Burnup</span></h3>
-              <select id="burndown-period" onchange="renderBurndownChart()" style="padding:5px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;">
-                <option value="4">4 <span data-i18n="weeks">sem.</span></option>
-                <option value="8" selected>8 <span data-i18n="weeks">sem.</span></option>
-                <option value="12">12 <span data-i18n="weeks">sem.</span></option>
-              </select>
+
+          <!-- Sous-tache 2 : mode edition -->
+          <div class="subtask-item" data-id="102" id="st-row-102">
+            <div class="subtask-view" id="st-view-102" style="display:none;">
+              <input type="checkbox" class="subtask-checkbox" />
+              <span class="subtask-title">Développer l'API</span>
+              <span class="subtask-meta">
+                <span class="subtask-assignee-badge" style="background:#f59e0b20;color:#f59e0b;">🔄</span>
+                <span class="subtask-assignee-badge">👤 Vincent</span>
+                <span class="subtask-due-badge st-overdue">📅 05/10/2026</span>
+                <span class="subtask-assignee-badge">⏱ 8h</span>
+              </span>
+              <button class="subtask-edit-btn" title="Modifier la sous-tâche">✏️</button>
+              <button class="subtask-delete" title="Supprimer">✕</button>
             </div>
-            <div id="chart-burndown" style="overflow-x:auto;"></div>
-          </div>
-        </div>
-        <div class="stats-summary">
-          <div class="stats-summary-item">
-            <span class="stats-summary-value" id="stats-completion-rate">0%</span>
-            <span class="stats-summary-label" data-i18n="completionRate">Taux de complétion</span>
-          </div>
-          <div class="stats-summary-item">
-            <span class="stats-summary-value" id="stats-overdue-count">0</span>
-            <span class="stats-summary-label" data-i18n="overdueLabel">En retard</span>
-          </div>
-          <div class="stats-summary-item">
-            <span class="stats-summary-value" id="stats-avg-time">0h</span>
-            <span class="stats-summary-label" data-i18n="avgTimePerTask">Temps moyen/tâche</span>
-          </div>
-          <div class="stats-summary-item">
-            <span class="stats-summary-value" id="stats-total-time">0h</span>
-            <span class="stats-summary-label" data-i18n="totalTime">Temps total</span>
-          </div>
-        </div>
-        <div class="stats-charts-row">
-          <div class="stats-chart-card" style="grid-column: span 2;">
-            <h3>📋 <span data-i18n="activityLog">Journal d'activité</span></h3>
-            <div id="activity-log-list" style="max-height:400px;overflow-y:auto;"></div>
-          </div>
-        </div>
-      </div>
-    </div>
 
-    <!-- TAB: TEMPLATES -->
-    <div class="tab-content" id="tab-templates">
-      <div class="templates-header">
-        <div class="section-title">
-          <h2 data-i18n="templatesTitle">Tâches Préformatées</h2>
-          <p data-i18n="templatesSubtitle">Gérez les modèles de tâches disponibles pour tous les utilisateurs</p>
-        </div>
-        <button class="btn-new-task" onclick="openNewTemplateModal()">+ <span data-i18n="newTemplate">Nouveau modèle</span></button>
-      </div>
-      <div class="table-filters">
-        <input type="text" id="template-search" placeholder="Rechercher un modèle..." data-i18n-placeholder="templateSearchPlaceholder" oninput="renderTemplatesView()" />
-        <select id="filter-template-priority" onchange="renderTemplatesView()">
-          <option value="" data-i18n="allPriorities">Toutes priorités</option>
-          <option value="high" data-i18n="priorityHigh">Haute</option>
-          <option value="medium" data-i18n="priorityMedium">Moyenne</option>
-          <option value="low" data-i18n="priorityLow">Basse</option>
-        </select>
-      </div>
-      <div id="templates-list"></div>
-    </div>
+            <!-- Formulaire d'edition (affiche) -->
+            <div class="subtask-edit-form" id="st-edit-102" style="display:flex;">
+              <input type="text" class="subtask-edit-title" id="st-title-102" value="Développer l'API" placeholder="Titre de la sous-tâche...">
+              <textarea class="subtask-edit-title" id="st-desc-102" rows="2" placeholder="Description (optionnel)..." style="resize:vertical;">Endpoints REST + documentation</textarea>
 
-    <!-- TAB: TEAM -->
-    <div class="tab-content" id="tab-team">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+              <!-- Type -->
+              <div>
+                <div class="st-pill-label">Type</div>
+                <div class="st-pill-group">
+                  <button type="button" class="st-pill active-progress">↳ Sous-tâche</button>
+                  <button type="button" class="st-pill">◆ Jalon (1 date)</button>
+                </div>
+                <input type="hidden" id="st-type-102" value="subtask" />
+              </div>
 
-        <!-- USERS SECTION -->
-        <div>
-          <div class="section-title" style="display:flex;align-items:center;justify-content:space-between;">
-            <div>
-              <h2 data-i18n="teamUsersTitle">Utilisateurs</h2>
-              <p data-i18n="teamUsersSubtitle">Gérez les membres de votre équipe</p>
-            </div>
-            <div style="display:flex;gap:8px;">
-              <button class="btn btn-secondary btn-sm" onclick="openManageRolesModal()" title="Gérer les rôles" data-i18n-title="manageRolesTitle">⚙️ <span data-i18n="manageRoles">Rôles</span></button>
-              <button class="btn btn-primary btn-sm" onclick="openNewUserModal()">+ <span data-i18n="addUser">Ajouter</span></button>
-            </div>
-          </div>
-          <div id="users-list"></div>
-        </div>
+              <!-- Statut -->
+              <div>
+                <div class="st-pill-label">Statut</div>
+                <div class="st-pill-group" id="st-status-group-102">
+                  <button type="button" class="st-pill">📥 À faire</button>
+                  <button type="button" class="st-pill" style="background:#f59e0b;color:#fff;border-color:#f59e0b;">🔄 En cours</button>
+                  <button type="button" class="st-pill">✅ Terminé</button>
+                </div>
+                <input type="hidden" id="st-status-102" value="progress" />
+              </div>
 
-        <!-- GROUPS SECTION -->
-        <div>
-          <div class="section-title" style="display:flex;align-items:center;justify-content:space-between;">
-            <div>
-              <h2 data-i18n="teamGroupsTitle">Groupes</h2>
-              <p data-i18n="teamGroupsSubtitle">Organisez vos utilisateurs en groupes</p>
-            </div>
-            <button class="btn btn-primary btn-sm" onclick="openNewGroupModal()">+ <span data-i18n="addGroup">Ajouter</span></button>
-          </div>
-          <div id="groups-list"></div>
-        </div>
+              <!-- Priorite -->
+              <div>
+                <div class="st-pill-label">Priorité</div>
+                <div class="st-pill-group" id="st-priority-group-102">
+                  <button type="button" class="st-pill active-high">Haute</button>
+                  <button type="button" class="st-pill">Moyenne</button>
+                  <button type="button" class="st-pill">Basse</button>
+                </div>
+                <input type="hidden" id="st-priority-102" value="high" />
+              </div>
 
-      </div>
-    </div>
-
-    <!-- TAB: SETTINGS -->
-    <div class="tab-content" id="tab-settings">
-      <div class="section-title">
-        <h2 data-i18n="tabSettings">Paramètres</h2>
-        <p data-i18n="settingsSubtitle">Configurez vos projets, produits et autres options</p>
-      </div>
-
-      <div class="settings-grid">
-        <!-- PROJECTS SECTION -->
-        <div class="settings-section">
-          <div class="settings-section-header">
-            <div>
-              <h3 data-i18n="manageProjects">Projets</h3>
-              <p data-i18n="projectsSubtitle">Gérez vos projets</p>
-            </div>
-            <button class="btn btn-primary btn-sm" onclick="openProjectModal()">+ <span data-i18n="addProject">Ajouter</span></button>
-          </div>
-          <div id="projects-list" class="settings-content"></div>
-        </div>
-
-        <!-- CATEGORIES SECTION -->
-        <div class="settings-section">
-          <div class="settings-section-header">
-            <div>
-              <h3 data-i18n="categories">Produits</h3>
-              <p data-i18n="categoriesSubtitle">Gérez les produits de tâches</p>
-            </div>
-            <button class="btn btn-primary btn-sm" onclick="openCategoriesModal()">+ <span data-i18n="addCategory">Ajouter</span></button>
-          </div>
-          <div id="categories-list" class="settings-content"></div>
-        </div>
-
-        <!-- TAGS SECTION -->
-        <div class="settings-section">
-          <div class="settings-section-header">
-            <div>
-              <h3 data-i18n="tags">Tags</h3>
-              <p data-i18n="tagsSubtitle">Gérez les tags pour vos tâches</p>
-            </div>
-            <button class="btn btn-primary btn-sm" onclick="openTagsModal()">+ <span data-i18n="addTag">Ajouter</span></button>
-          </div>
-          <div id="tags-list" class="settings-content"></div>
-        </div>
-
-        <!-- KANBAN STATUSES -->
-        <div class="settings-section">
-          <div class="settings-section-header">
-            <div>
-              <h3>📊 <span data-i18n="manageStatuses">Colonnes Kanban</span></h3>
-              <p data-i18n="statusesSubtitle">Personnalisez les colonnes de statut du Kanban</p>
-            </div>
-            <button class="btn btn-primary btn-sm" onclick="addKanbanStatus()">+ <span data-i18n="addStatus">Ajouter</span></button>
-          </div>
-          <div id="kanban-statuses-list" class="settings-content"></div>
-        </div>
-
-        <!-- CARD DISPLAY SETTINGS -->
-        <div class="settings-section">
-          <div class="settings-section-header">
-            <div>
-              <h3>🎨 <span data-i18n="cardDisplayTitle">Affichage des cartes</span></h3>
-              <p data-i18n="cardDisplaySubtitle">Choisissez les éléments visibles sur les cartes Kanban</p>
-            </div>
-          </div>
-          <div id="card-display-settings" class="settings-content"></div>
-        </div>
-
-        <!-- RACI SECTION -->
-        <div class="settings-section">
-          <div class="settings-section-header">
-            <div>
-              <h3>📋 <span data-i18n="raciMode">Mode RACI</span></h3>
-              <p data-i18n="raciSubtitle">Activez la matrice RACI pour définir les rôles sur chaque tâche</p>
-            </div>
-          </div>
-          <div class="settings-content">
-            <div id="raci-toggle-container"></div>
-          </div>
-        </div>
-
-        <!-- AUTOMATIONS SECTION -->
-        <div class="settings-section" style="grid-column: 1 / -1;">
-          <div class="settings-section-header" style="display:flex;justify-content:space-between;align-items:center;">
-            <div>
-              <h3>⚡ <span data-i18n="automationTitle">Automatisations</span></h3>
-              <p data-i18n="automationSubtitle">Actions automatiques quand les tâches changent</p>
-            </div>
-            <button class="btn btn-primary btn-sm" onclick="openAddAutomationRuleModal()">+ <span data-i18n="addRule">Ajouter une règle</span></button>
-          </div>
-          <div id="automation-rules-list" class="settings-content"></div>
-        </div>
-
-        <!-- NOTIFICATIONS & E-MAIL SECTION -->
-        <div class="settings-section" style="grid-column: 1 / -1;">
-          <div class="settings-section-header">
-            <div>
-              <h3>🔔 <span data-i18n="notifEmailTitle">Notifications & e-mail</span></h3>
-              <p data-i18n="notifEmailSubtitle">Prévenir les utilisateurs concernés et, en option, envoyer un e-mail via un webhook</p>
-            </div>
-          </div>
-          <div class="settings-content">
-            <div id="notify-concerned-toggle"></div>
-            <div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:10px;padding:14px 16px;margin-top:14px;font-size:13px;line-height:1.6;color:#334155;">
-              <div style="font-weight:800;color:#3730a3;margin-bottom:8px;">📧 Recevoir un e-mail à chaque notification (webhook Grist → n8n)</div>
-              <p style="margin-bottom:8px;">Le widget enregistre une ligne dans la table <strong>PM_Notifications</strong> pour chaque personne concernée par une tâche (création ou modification). Un <strong>webhook Grist</strong> posé sur cette table peut transformer chaque notification en <strong>e-mail</strong>, via <strong>n8n</strong> (gratuit / auto-hébergeable).</p>
-              <div style="margin-bottom:10px;padding:8px 12px;background:#dcfce7;border:1px solid #86efac;border-radius:8px;">⬇️ <strong>Le plus simple :</strong> téléchargez un workflow prêt à l'emploi et importez-le dans n8n (<em>Menu → Import from File</em>), selon votre messagerie :
-                <div style="margin-top:6px;display:flex;gap:14px;flex-wrap:wrap;">
-                  <a href="n8n-grist-pm-email-gmail.json" download style="font-weight:700;color:#15803d;">📧 Gmail</a>
-                  <a href="n8n-grist-pm-email-outlook.json" download style="font-weight:700;color:#15803d;">📧 Outlook / Microsoft 365</a>
-                  <a href="n8n-grist-pm-email.json" download style="font-weight:700;color:#15803d;">📧 SMTP (Zimbra &amp; autres)</a>
+              <!-- Assignes -->
+              <div>
+                <div class="st-pill-label">Assigné à (plusieurs possibles)</div>
+                <input type="text" id="st-assignee-search-102" placeholder="🔍 Rechercher un membre..." style="width:100%;padding:5px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;margin-bottom:4px;" autocomplete="off" />
+                <div class="st-assignee-list" id="st-assignee-102" style="display:flex;flex-wrap:wrap;gap:4px 10px;max-height:84px;overflow-y:auto;padding:6px 8px;border:1px solid #e2e8f0;border-radius:8px;">
+                  <label style="display:inline-flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;white-space:nowrap;"><input type="checkbox" value="Laura"> Laura</label>
+                  <label style="display:inline-flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;white-space:nowrap;"><input type="checkbox" value="Vincent" checked> Vincent</label>
+                  <label style="display:inline-flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;white-space:nowrap;"><input type="checkbox" value="Karim"> Karim</label>
                 </div>
               </div>
-              <p style="margin-bottom:10px;padding:8px 12px;background:#fef9c3;border:1px solid #fde047;border-radius:8px;">🏢 <strong>Pas de n8n ?</strong> Si votre organisation est sur <strong>Microsoft 365</strong>, suivez plutôt le guide <a href="POWER-AUTOMATE-GUIDE.md" target="_blank" rel="noopener" style="font-weight:700;color:#a16207;">Power Automate (pas-à-pas) ↗</a> — pas d'outil à installer.</p>
-              <p style="font-weight:700;margin-bottom:4px;">Comment utiliser le fichier .json dans n8n :</p>
-              <ol style="margin:0 0 8px 20px;padding:0;">
-                <li><strong>Importez</strong> le fichier : dans n8n, menu <strong>⋮ (en haut à droite)</strong> → <strong>Import from File</strong> → sélectionnez le .json téléchargé. Le Webhook, la normalisation et l'envoi d'e-mail apparaissent, déjà reliés et mappés sur <code>User_Email</code>, <code>Type</code>, <code>Message</code>.</li>
-                <li>Ouvrez le nœud <strong>« Envoyer l'e-mail (SMTP) »</strong> : associez vos <strong>identifiants SMTP</strong> et votre <em>adresse expéditeur</em>.</li>
-                <li><strong>Activez</strong> le workflow, puis copiez l'<em>URL de production</em> du nœud Webhook.</li>
-                <li><strong>Dans Grist</strong> : ouvre le document → menu <strong>⚙️ Paramètres du document</strong> → section <strong>Webhooks</strong> → <strong>Ajouter un webhook</strong> :
-                  <ul style="margin:4px 0 4px 18px;">
-                    <li>Table : <strong>PM_Notifications</strong></li>
-                    <li>Événement : <strong>Add</strong> (à chaque nouvelle notification)</li>
-                    <li>URL : colle l'URL du webhook n8n</li>
-                    <li>Colonnes (optionnel) : <em>User_Email, Message, Type, Task_Id</em></li>
-                  </ul>
-                </li>
-                <li><strong>Teste</strong> : crée ou modifie une tâche concernant un utilisateur → une ligne PM_Notifications est créée → Grist appelle n8n → l'e-mail part. ✅</li>
-              </ol>
-              <p style="font-size:12px;color:#64748b;margin-top:8px;">ℹ️ Les webhooks Grist nécessitent un plan/instance qui les autorise (sur Grist auto-hébergé : variable <code>GRIST_ALLOWED_WEBHOOK_DOMAINS</code>). Le widget ne peut pas envoyer d'e-mail directement (bac à sable navigateur) — c'est pour cela qu'on passe par un webhook.</p>
+
+              <!-- Dates + heures -->
+              <div class="st-meta-row">
+                <input type="date" class="subtask-edit-date" id="st-start-102" value="2026-10-01" title="Date début">
+                <input type="date" class="subtask-edit-date" id="st-due-102" value="2026-10-05" title="Échéance">
+                <input type="number" class="st-hours-input" id="st-hours-102" value="8" placeholder="Heures" min="0" step="0.5">
+              </div>
+
+              <!-- Dépendance entre sous-tâches -->
+              <div>
+                <div class="st-pill-label">🔗 Bloquée par</div>
+                <select id="st-dep-102" class="st-dep-select">
+                  <option value="">-- Aucune dépendance --</option>
+                  <option value="101">Rédiger le cahier des charges</option>
+                </select>
+              </div>
+
+              <!-- Definition of Done : en bas du formulaire -->
+              <div class="subtask-dod">
+                <div class="subtask-dod-label">Definition of Done <span class="dod-count">1/3</span></div>
+                <div class="subtask-dod-list">
+                  <div class="dod-item">
+                    <input type="checkbox" class="dod-checkbox" checked />
+                    <input type="text" class="dod-text" value="Schéma de la base validé" />
+                    <button type="button" class="dod-delete" title="Supprimer">✕</button>
+                  </div>
+                  <div class="dod-item">
+                    <input type="checkbox" class="dod-checkbox" />
+                    <input type="text" class="dod-text" value="Endpoints CRUD opérationnels" />
+                    <button type="button" class="dod-delete" title="Supprimer">✕</button>
+                  </div>
+                  <div class="dod-item">
+                    <input type="checkbox" class="dod-checkbox" />
+                    <input type="text" class="dod-text" value="API documentée" />
+                    <button type="button" class="dod-delete" title="Supprimer">✕</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Saisie d'un nouveau critere -->
+              <div class="st-dod-add-row">
+                <input type="text" id="st-dod-new-102" class="st-dod-add-input" placeholder="Saisir un critère..." />
+                <button type="button" class="dod-add-btn" title="Ajouter un critère">➕</button>
+              </div>
+
+              <!-- Actions -->
+              <div class="st-form-actions">
+                <button type="button" class="subtask-cancel-btn">Annuler</button>
+                <button type="button" class="subtask-save-btn">✓ Enregistrer</button>
+              </div>
             </div>
           </div>
         </div>
 
-        <!-- SECURITY SECTION -->
-        <div class="settings-section" style="grid-column: 1 / -1;">
-          <div class="settings-section-header">
-            <div>
-              <h3>🛡️ <span data-i18n="securityTitle">Sécurité du document</span></h3>
-              <p data-i18n="securitySubtitle">Protégez les tables PM_* avec des règles d'accès Grist (ACL)</p>
-            </div>
-          </div>
-          <div id="security-status" class="settings-content"></div>
-        </div>
-
-        <!-- COLUMN MAPPING SECTION -->
-        <div class="settings-section" style="grid-column: 1 / -1;">
-          <div class="settings-section-header">
-            <div>
-              <h3>🔧 <span data-i18n="advancedConfig">Configuration avancée</span></h3>
-              <p data-i18n="mappingSubtitle">Mappez vos propres tables et colonnes Grist</p>
-            </div>
-            <button class="btn btn-secondary btn-sm" onclick="openColumnMappingModal()">⚙️ <span data-i18n="configureMapping">Configurer le mapping</span></button>
-          </div>
-          <div class="settings-content">
-            <p style="color:#64748b;font-size:13px;margin-bottom:12px;" data-i18n="mappingDescription">
-              Par défaut, le widget utilise les tables PM_Tasks, PM_Users, etc. Vous pouvez mapper vos propres tables existantes pour réutiliser vos données.
-            </p>
-            <a href="https://github.com/isaytoo/grist-project-manager-widget/blob/main/GUIDE_MAPPING.md"
-               target="_blank"
-               style="display:inline-flex;align-items:center;gap:6px;color:#3b82f6;text-decoration:none;font-size:13px;font-weight:500;">
-              📖 <span data-i18n="mappingGuide">Consulter le guide complet du système de mapping</span>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/>
-              </svg>
-            </a>
-          </div>
+        <!-- Ajout de sous-tache -->
+        <div class="subtask-add-row">
+          <input type="text" id="new-subtask-input" class="subtask-input" placeholder="Ajouter une sous-tâche...">
+          <button class="subtask-add-btn">+</button>
         </div>
       </div>
-    </div>
 
-  </div>
-
-  <!-- TOAST CONTAINER -->
-  <div class="toast-container" id="toast-container"></div>
-
-  <!-- MODAL CONTAINER -->
-  <div id="modal-container"></div>
-
-  <!-- ATTACHMENT VIEWER (D2) -->
-  <div id="attachment-viewer" class="modal-overlay" style="display:none;z-index:10000;" onclick="if(event.target===this)closeAttachmentViewer()">
-    <div class="modal-content" style="max-width:90vw;width:auto;">
-      <div class="modal-header">
-        <h2 id="attachment-viewer-title" style="font-size:15px;"></h2>
-        <button class="modal-close" onclick="closeAttachmentViewer()">×</button>
-      </div>
-      <div class="modal-body" id="attachment-viewer-body" style="padding:16px;"></div>
     </div>
   </div>
-
-  <!-- CONFIRM MODAL -->
-  <div id="confirm-modal" class="modal-overlay" style="display:none;">
-    <div class="modal-content confirm-modal-content">
-      <div class="confirm-modal-icon">⚠️</div>
-      <h3 id="confirm-modal-title">Confirmation</h3>
-      <p id="confirm-modal-message">Êtes-vous sûr ?</p>
-      <div class="confirm-modal-buttons">
-        <button class="btn btn-secondary" onclick="closeConfirmModal(false)">Annuler</button>
-        <button class="btn btn-danger" id="confirm-modal-ok" onclick="closeConfirmModal(true)">Supprimer</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- PROMPT MODAL -->
-  <div id="prompt-modal" class="modal-overlay" style="display:none;">
-    <div class="modal-content" style="max-width:440px;padding:0;border-radius:16px;overflow:hidden;">
-      <div id="prompt-modal-header" style="padding:20px 24px 12px;border-bottom:1px solid #e2e8f0;">
-        <h3 id="prompt-modal-title" style="font-size:16px;font-weight:700;color:#1e293b;margin:0;"></h3>
-      </div>
-      <div id="prompt-modal-body" style="padding:20px 24px;max-height:60vh;overflow-y:auto;"></div>
-      <div style="display:flex;justify-content:flex-end;gap:10px;padding:12px 24px 20px;border-top:1px solid #f1f5f9;">
-        <button class="btn btn-secondary" onclick="closePromptModal(null)" style="min-width:90px;">Annuler</button>
-        <button class="btn btn-primary" id="prompt-modal-ok" onclick="submitPromptModal()" style="min-width:90px;">OK</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- AUTOMATION RULE MODAL -->
-  <div id="automation-modal" class="modal-overlay" style="display:none;">
-    <div class="modal-content" style="max-width:480px;">
-      <div class="modal-header">
-        <h2 id="automation-modal-title">⚡ Ajouter une règle</h2>
-        <button class="modal-close" onclick="closeAutomationModal()">×</button>
-      </div>
-      <div class="modal-body" style="padding:20px;">
-        <div class="form-group" style="margin-bottom:14px;">
-          <label data-i18n="triggerLabel">Déclencheur</label>
-          <select id="auto-trigger" onchange="onAutoTriggerChange()" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;">
-            <option value="status_change" data-i18n="triggerStatusChange">Changement de statut</option>
-            <option value="priority_change" data-i18n="triggerPriorityChange">Changement de priorité</option>
-            <option value="assignment_change" data-i18n="triggerAssignmentChange">Changement d'assignation</option>
-            <option value="overdue" data-i18n="triggerOverdue">Tâche en retard</option>
-            <option value="approaching_deadline" data-i18n="triggerApproachingDeadline">Échéance proche (3j)</option>
-          </select>
-        </div>
-        <div id="auto-conditions" style="display:flex;gap:8px;margin-bottom:14px;">
-          <div class="form-group" style="flex:1;">
-            <label data-i18n="conditionFrom">De</label>
-            <select id="auto-from" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;"></select>
-          </div>
-          <div class="form-group" style="flex:1;">
-            <label data-i18n="conditionTo">Vers</label>
-            <select id="auto-to" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;"></select>
-          </div>
-        </div>
-        <div class="form-group" style="margin-bottom:14px;">
-          <label data-i18n="actionLabel">Action</label>
-          <select id="auto-action" onchange="onAutoActionChange()" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;">
-            <option value="notify_assignee" data-i18n="actionNotifyAssignee">Notifier l'assigné</option>
-            <option value="notify_project_lead" data-i18n="actionNotifyProjectLead">Notifier le responsable</option>
-            <option value="notify_specific" data-i18n="actionNotifySpecific">Notifier une personne</option>
-            <option value="notify_all" data-i18n="actionNotifyAll">Notifier tout le monde</option>
-          </select>
-        </div>
-        <div id="auto-target-wrap" class="form-group" style="margin-bottom:14px;display:none;">
-          <label>Email</label>
-          <input type="email" id="auto-target" placeholder="email@example.com" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;">
-        </div>
-        <div class="form-group" style="margin-bottom:14px;">
-          <label data-i18n="messageTemplate">Message</label>
-          <input type="text" id="auto-msg-fr" placeholder="FR: La tâche &quot;{title}&quot; a changé" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:6px;">
-          <input type="text" id="auto-msg-en" placeholder="EN: Task &quot;{title}&quot; changed" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;">
-          <div style="font-size:10px;color:#94a3b8;margin-top:4px;">{title} {status} {priority} {assignee}</div>
-        </div>
-      </div>
-      <div class="modal-footer" style="padding:12px 20px;display:flex;gap:8px;justify-content:flex-end;border-top:1px solid #e2e8f0;">
-        <button class="btn btn-secondary" onclick="closeAutomationModal()">Annuler</button>
-        <button class="btn btn-primary" onclick="saveAutomationRuleFromModal()">OK</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- PROJECT MODAL -->
-  <div id="project-modal" class="modal-overlay" style="display:none;">
-    <div class="modal-content" style="max-width:500px;">
-      <div class="modal-header">
-        <h2 data-i18n="manageProjects">Gérer les projets</h2>
-        <button class="modal-close" onclick="closeProjectModal()">×</button>
-      </div>
-      <div class="modal-body">
-        <input type="text" id="project-search" placeholder="Rechercher un projet..." data-i18n-placeholder="projectSearchPlaceholder" oninput="renderProjectList()" style="width:100%;padding:8px 12px;border:1px solid #e2e8f0;border-radius:6px;font-size:13px;margin-bottom:10px;" autocomplete="off">
-        <div id="project-list" style="margin-bottom:20px;"></div>
-        <div class="form-section">
-          <h3 id="project-form-title" data-i18n="addProject">Ajouter un projet</h3>
-          <input type="hidden" id="edit-project-id" value="">
-          <div class="form-row">
-            <div class="form-group">
-              <label data-i18n="projectName">Nom du projet</label>
-              <input type="text" id="project-name" placeholder="Mon projet">
-            </div>
-            <div class="form-group">
-              <label data-i18n="projectColor">Couleur</label>
-              <input type="color" id="project-color" value="#6366f1">
-            </div>
-          </div>
-          <div class="form-group">
-            <label data-i18n="projectDescription">Description</label>
-            <textarea id="project-description" rows="2" placeholder="Description du projet..."></textarea>
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label data-i18n="projectStatus">Statut</label>
-              <select id="project-status">
-                <option value="active" data-i18n="projectActive">Actif</option>
-                <option value="completed" data-i18n="projectCompleted">Terminé</option>
-                <option value="archived" data-i18n="projectArchived">Archivé</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label data-i18n="projectLead">Responsable</label>
-              <select id="project-lead"><option value="">--</option></select>
-            </div>
-          </div>
-          <button class="btn btn-primary" onclick="saveProject()">💾 <span data-i18n="save">Enregistrer</span></button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- TAGS MODAL -->
-  <div id="tags-modal" class="modal-overlay" style="display:none;">
-    <div class="modal-content" style="max-width:500px;">
-      <div class="modal-header">
-        <h2 data-i18n="tags">Tags</h2>
-        <button class="modal-close" onclick="closeTagsModal()">×</button>
-      </div>
-      <div class="modal-body">
-        <div id="tags-modal-list" style="margin-bottom:20px;"></div>
-        <div class="form-section">
-          <h3 id="tag-form-title" data-i18n="addTag">Ajouter un tag</h3>
-          <input type="hidden" id="edit-tag-id" value="">
-          <div class="form-row">
-            <div class="form-group">
-              <label data-i18n="tagName">Nom du tag</label>
-              <input type="text" id="tag-name" placeholder="Mon tag">
-            </div>
-            <div class="form-group">
-              <label data-i18n="tagColor">Couleur</label>
-              <input type="color" id="tag-color" value="#6366f1">
-            </div>
-          </div>
-          <button class="btn btn-primary" onclick="saveTag()">💾 <span data-i18n="save">Enregistrer</span></button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <script src="widget.js?v=136"></script>
-  <footer style="position: fixed; bottom: 0; left: 0; right: 0; background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 4px 12px; font-size: 0.7em; color: #94a3b8; display: flex; justify-content: space-between; z-index: 1000;">
-    <span>© 2026 isaytoo</span>
-    <a href="https://gristup.fr" target="_blank" style="color: #3b82f6; text-decoration: none;">gristup.fr</a>
-  </footer>
+</div>
 </body>
 </html>

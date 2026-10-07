@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: write
+  pages: write
 
 concurrency:
   group: deploy-dev
@@ -38,3 +39,14 @@ jobs:
           git add -A
           git commit -m "deploy dev depuis develop" || echo "aucun changement a deployer"
           git push origin HEAD:main
+
+      # Un push GITHUB_TOKEN ne declenche pas pages-build-deplacement :
+      # on demande explicitement un rebuild Pages de la branche publiee.
+      - name: Demander un rebuild Pages
+        run: |
+          curl -sS -f -X POST \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/pages/builds"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
