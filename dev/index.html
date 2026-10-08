@@ -721,28 +721,6 @@
       border-color: #7f1d1d;
     }
 
-    /* ========== STAT CARDS ========== */
-    .stats-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      margin: 16px 24px;
-    }
-    .stat-card {
-      background: white;
-      border: 1px solid #e2e8f0;
-      border-radius: 10px;
-      padding: 10px 14px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      min-width: 0;
-    }
-    .stat-card .stat-label { font-size: 11px; color: #64748b; font-weight: 500; }
-    .stat-card .stat-value { font-size: 20px; font-weight: 800; margin-top: 1px; }
-    .stat-card .stat-icon { font-size: 22px; opacity: 0.8; }
-    .stat-total .stat-value { color: #1e293b; }
-
     /* ========== BUTTONS ========== */
     .btn {
       display: inline-flex;
@@ -1415,6 +1393,21 @@
       color: #64748b;
       text-align: center;
       padding: 2px;
+    }
+    .day-task.day-milestone {
+      background: #f5f3ff;
+      color: #7c3aed;
+      border-left: 2px solid #7c3aed;
+      font-weight: 700;
+    }
+    .day-task.day-milestone.milestone-done {
+      text-decoration: line-through;
+      opacity: 0.6;
+    }
+    body.dark-mode .day-task.day-milestone {
+      background: #2e1065;
+      color: #c4b5fd;
+      border-left-color: #8b5cf6;
     }
     .day-task {
       cursor: grab;
@@ -2287,17 +2280,31 @@
     .subtask-dod-list.dod-all-done { border-left-color: #22c55e; }
     .dod-item {
       display: flex; align-items: center; gap: 6px;
-      padding: 3px 6px; background: #f8fafc; border-radius: 6px; font-size: 12px;
+      padding: 4px 7px; background: #f8fafc; border-radius: 6px; font-size: 13px;
     }
     .dod-item:hover { background: #f1f5f9; }
     .dod-checkbox { width: 14px; height: 14px; accent-color: #22c55e; cursor: pointer; flex-shrink: 0; margin: 0; }
     .dod-text {
       flex: 1; border: none; background: transparent; color: #475569;
-      font-size: 12px; padding: 2px 4px; outline: none; min-width: 0;
+      font-size: 13px; padding: 3px 5px; outline: none; min-width: 0;
     }
     .dod-text:focus { background: #fff; border-radius: 4px; box-shadow: 0 0 0 1px #3b82f6; }
     .dod-text-view { flex: 1; color: #475569; font-size: 12px; padding: 2px 4px; min-width: 0; }
     .dod-text-view.dod-text-done { text-decoration: line-through; color: #94a3b8; }
+    .dod-assignee {
+      flex-shrink: 0; width: 130px; padding: 3px 6px;
+      border: 1px solid #e2e8f0; border-radius: 4px;
+      font-size: 12px; color: #475569; background: #fff;
+    }
+    .dod-drag-handle {
+      cursor: grab; flex-shrink: 0; user-select: none;
+      color: #cbd5e1; font-size: 13px; letter-spacing: -3px;
+      padding: 0 3px; line-height: 1;
+    }
+    .dod-drag-handle:active { cursor: grabbing; }
+    .dod-item.dod-dragging { opacity: 0.45; }
+    .dod-item.dod-drop-target { box-shadow: 0 -2px 0 0 #6366f1; }
+    body.dark-mode .dod-drag-handle { color: #475569; }
     .dod-delete {
       width: 18px; height: 18px; border: none; background: transparent;
       color: #cbd5e1; cursor: pointer; border-radius: 4px; font-size: 11px;
@@ -2314,8 +2321,8 @@
     .st-dod-add-row { display: flex; gap: 6px; align-items: center; margin-top: 6px; }
     .st-dod-add-row .dod-add-btn { flex-shrink: 0; padding: 3px 8px; }
     .st-dod-add-input {
-      flex: 1; min-width: 0; padding: 4px 8px;
-      border: 1px solid #e2e8f0; border-radius: 6px; font-size: 12px;
+      flex: 1; min-width: 0; padding: 6px 10px;
+      border: 1px solid #e2e8f0; border-radius: 6px; font-size: 13px;
     }
     .st-dod-add-input:focus { outline: none; border-color: #3b82f6; }
     body.dark-mode .dod-item { background: #1e293b; }
@@ -2324,6 +2331,7 @@
     body.dark-mode .dod-text:focus { background: #0f172a; }
     body.dark-mode .dod-text-view { color: #e2e8f0; }
     body.dark-mode .dod-text-view.dod-text-done { color: #64748b; }
+    body.dark-mode .dod-assignee { background: #0f172a; border-color: #334155; color: #e2e8f0; }
     body.dark-mode .subtask-dod-list { border-left-color: #334155; }
     body.dark-mode .subtask-dod-list.dod-all-done { border-left-color: #4ade80; }
     body.dark-mode .subtask-dod-label { color: #94a3b8; }
@@ -2529,22 +2537,32 @@
     /* Subtask edit form — modern card */
     .subtask-edit-form {
       display: none;
-      flex-direction: column;
-      gap: 10px;
-      padding: 12px;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px 14px;
+      padding: 14px;
       margin: 6px 0 2px;
       background: #f8fafc;
       border: 1px solid #e2e8f0;
       border-radius: 10px;
       animation: dropdownIn .12s ease;
     }
+    .subtask-edit-form > .subtask-edit-title,
+    .subtask-edit-form > .st-meta-row,
+    .subtask-edit-form > .subtask-dod,
+    .subtask-edit-form > .st-dod-add-row,
+    .subtask-edit-form > .subtask-attach,
+    .subtask-edit-form > .st-form-actions,
+    .subtask-edit-form > .st-span2 { grid-column: 1 / -1; }
+    @media (max-width: 900px) {
+      .subtask-edit-form { grid-template-columns: 1fr; }
+    }
     .subtask-edit-title {
       width: 100%;
       box-sizing: border-box;
-      padding: 7px 10px;
+      padding: 9px 12px;
       border: 1px solid #e2e8f0;
       border-radius: 7px;
-      font-size: 13px;
+      font-size: 14px;
       font-family: inherit;
       background: #fff;
       color: inherit;
@@ -2559,7 +2577,7 @@
       flex-wrap: wrap;
     }
     .st-pill-label {
-      font-size: 10px;
+      font-size: 11px;
       font-weight: 600;
       color: #94a3b8;
       text-transform: uppercase;
@@ -2567,11 +2585,11 @@
       margin-bottom: 4px;
     }
     .st-pill {
-      padding: 4px 10px;
+      padding: 5px 12px;
       border-radius: 20px;
       border: 1.5px solid #e2e8f0;
       background: transparent;
-      font-size: 11px;
+      font-size: 12px;
       font-weight: 600;
       cursor: pointer;
       font-family: inherit;
@@ -2595,10 +2613,10 @@
     .st-meta-row select,
     .subtask-edit-select,
     .subtask-edit-date {
-      padding: 5px 10px;
+      padding: 7px 10px;
       border: 1px solid #e2e8f0;
       border-radius: 7px;
-      font-size: 12px;
+      font-size: 13px;
       font-family: inherit;
       background: #fff;
       color: inherit;
@@ -2609,10 +2627,10 @@
     .subtask-edit-date:focus { border-color: #6366f1; }
     .st-dep-select {
       width: 100%;
-      padding: 5px 8px;
+      padding: 7px 10px;
       border: 1px solid #e2e8f0;
       border-radius: 6px;
-      font-size: 12px;
+      font-size: 13px;
       font-family: inherit;
       background: #fff;
       color: inherit;
@@ -2621,11 +2639,11 @@
     }
     .st-dep-select:focus { border-color: #6366f1; }
     .st-hours-input {
-      width: 72px;
-      padding: 5px 8px;
+      width: 90px;
+      padding: 7px 10px;
       border: 1px solid #e2e8f0;
       border-radius: 7px;
-      font-size: 12px;
+      font-size: 13px;
       font-family: inherit;
       background: #fff;
       color: inherit;
@@ -2635,12 +2653,12 @@
     /* Save/Cancel buttons */
     .st-form-actions { display: flex; gap: 6px; justify-content: flex-end; }
     .subtask-save-btn {
-      padding: 6px 14px;
+      padding: 8px 16px;
       background: #6366f1;
       color: #fff;
       border: none;
       border-radius: 7px;
-      font-size: 12px;
+      font-size: 13px;
       font-weight: 600;
       font-family: inherit;
       cursor: pointer;
@@ -2648,12 +2666,12 @@
     }
     .subtask-save-btn:hover { background: #4f46e5; }
     .subtask-cancel-btn {
-      padding: 6px 12px;
+      padding: 8px 14px;
       background: transparent;
       color: #94a3b8;
       border: 1px solid #e2e8f0;
       border-radius: 7px;
-      font-size: 12px;
+      font-size: 13px;
       font-family: inherit;
       cursor: pointer;
       transition: all .12s;
@@ -3378,7 +3396,7 @@
     .section-title p { font-size: 12px; color: #94a3b8; }
 
     /* ========== RICH DETAIL MODAL ========== */
-    .modal-detail { max-width: 900px; }
+    .modal-detail { max-width: 1150px; }
     .modal-detail .modal-body { padding: 0; }
     .modal-detail-top {
       padding: 14px 20px;
@@ -3392,13 +3410,13 @@
     }
     .modal-detail-content {
       display: grid;
-      grid-template-columns: 1fr 280px;
+      grid-template-columns: 1fr 320px;
       min-height: 360px;
     }
     .modal-detail-left { padding: 20px; border-right: 1px solid #f1f5f9; }
     .modal-detail-right { padding: 20px; background: #fafbfc; }
     .detail-title-input {
-      font-size: 20px; font-weight: 800; width: 100%;
+      font-size: 22px; font-weight: 800; width: 100%;
       padding: 10px 12px; margin-bottom: 14px; background: #fff;
       color: #1e293b; border: 1px solid #e2e8f0; border-radius: 10px;
       transition: border-color .15s, box-shadow .15s;
@@ -3411,13 +3429,13 @@
       margin-bottom: 14px;
     }
     .detail-field-icon { font-size: 14px; color: #94a3b8; min-width: 20px; margin-top: 6px; }
-    .detail-field-label { font-size: 11px; color: #94a3b8; font-weight: 600; min-width: 70px; margin-top: 6px; }
+    .detail-field-label { font-size: 12px; color: #94a3b8; font-weight: 600; min-width: 70px; margin-top: 7px; }
     .detail-field-value { flex: 1; }
     .detail-field-value input,
     .detail-field-value select,
     .detail-field-value textarea {
-      width: 100%; padding: 6px 10px; border: 1px solid #e2e8f0;
-      border-radius: 6px; font-size: 12px; font-family: inherit;
+      width: 100%; padding: 8px 12px; border: 1px solid #e2e8f0;
+      border-radius: 6px; font-size: 13px; font-family: inherit;
     }
     .detail-field-value input:focus,
     .detail-field-value select:focus,
@@ -3799,19 +3817,6 @@
     body.dark-mode .app-header p {
       color: #94a3b8;
     }
-    body.dark-mode .stat-card {
-      background: #1e293b;
-      border-color: #334155;
-    }
-    body.dark-mode .stat-label {
-      color: #94a3b8;
-    }
-    body.dark-mode .stat-value {
-      color: #f1f5f9;
-    }
-    body.dark-mode .stat-total .stat-value {
-      color: #f1f5f9;
-    }
     body.dark-mode .tabs-bar {
       background: #334155;
     }
@@ -4090,7 +4095,6 @@
 
     /* ========== RESPONSIVE ========== */
     @media (max-width: 768px) {
-      .stats-row { grid-template-columns: repeat(2, 1fr); }
       .kanban-column { min-width: 220px; flex: 1 0 220px; }
       .form-row { grid-template-columns: 1fr; }
       .header-row { flex-direction: column; align-items: flex-start; }
@@ -4155,9 +4159,6 @@
         </div>
       </div>
     </div>
-
-    <!-- STATS (dynamically generated by updateStats()) -->
-    <div class="stats-row" id="stats-row"></div>
 
     <!-- TAB: CALENDAR -->
     <div class="tab-content active" id="tab-calendar">

@@ -1145,9 +1145,15 @@ function getTaskSubtasks(taskId) {
 // (la tâche parente reste visible, avec zéro sous-tâche le cas échéant).
 function getVisibleTaskSubtasks(taskId) {
   var list = getTaskSubtasks(taskId);
-  if (!currentFilterAssignee) return list;
-  var identSet = personIdentSet(currentFilterAssignee);
-  return list.filter(function(st) { return assigneeListHas(st.Assignee, identSet); });
+  if (currentFilterAssignee) {
+    var identSet = personIdentSet(currentFilterAssignee);
+    list = list.filter(function(st) { return assigneeListHas(st.Assignee, identSet); });
+  }
+  if (currentFilterTag) {
+    var tagKey = String(currentFilterTag).trim();
+    list = list.filter(function(st) { return String(st.Tag || '').trim() === tagKey; });
+  }
+  return list;
 }
 
 function getTaskProgress(task) {
@@ -1930,6 +1936,7 @@ async function ensureTables() {
           { id: 'Status', type: 'Choice', widgetOptions: JSON.stringify({ choices: ['todo', 'progress', 'done', 'archived'] }) },
           { id: 'Priority', type: 'Choice', widgetOptions: JSON.stringify({ choices: ['high', 'medium', 'low'] }) },
           { id: 'Assignee', type: 'Text' },
+          { id: 'Tag', type: 'Text' },
           { id: 'Due_Date', type: 'Date' },
           { id: 'Estimated_Hours', type: 'Numeric' },
           { id: 'Completed', type: 'Bool' },
@@ -2253,6 +2260,9 @@ async function ensureTables() {
         if (stCols.indexOf('Assignee') === -1) {
           stActions.push(['AddColumn', SUBTASKS_TABLE, 'Assignee', { type: 'Text' }]);
         }
+        if (stCols.indexOf('Tag') === -1) {
+          stActions.push(['AddColumn', SUBTASKS_TABLE, 'Tag', { type: 'Text' }]);
+        }
         if (stCols.indexOf('Due_Date') === -1) {
           stActions.push(['AddColumn', SUBTASKS_TABLE, 'Due_Date', { type: 'Date' }]);
         }
@@ -2468,6 +2478,7 @@ async function loadAllData() {
           Order: subtaskData.Order ? subtaskData.Order[i] : 0,
           Blocked_By_Subtask_Id: subtaskData.Blocked_By_Subtask_Id ? subtaskData.Blocked_By_Subtask_Id[i] : null,
           Assignee: subtaskData.Assignee ? subtaskData.Assignee[i] : '',
+          Tag: subtaskData.Tag ? subtaskData.Tag[i] : '',
           Due_Date: subtaskData.Due_Date ? subtaskData.Due_Date[i] : null,
           Start_Date: subtaskData.Start_Date ? subtaskData.Start_Date[i] : null,
           Estimated_Hours: subtaskData.Estimated_Hours ? subtaskData.Estimated_Hours[i] : null,
@@ -3293,7 +3304,11 @@ function getFilteredTasks() {
   }
   if (currentFilterTag) {
     var tagKey = String(currentFilterTag).trim();
-    result = result.filter(function(t) { return String(t.Tag || '').trim() === tagKey; });
+    result = result.filter(function(t) {
+      if (String(t.Tag || '').trim() === tagKey) return true;
+      // La tâche parente reste visible si une de ses sous-tâches porte ce tag
+      return getTaskSubtasks(t.id).some(function(st) { return String(st.Tag || '').trim() === tagKey; });
+    });
   }
   if (mineOnly && !currentProjectId) {
     var myIds = myProjectIdSet();
@@ -3320,7 +3335,6 @@ function getProjectColor(projectId) {
 
 function refreshAllViews() {
   if (typeof renderProjectSelector === 'function') renderProjectSelector();
-  updateStats();
   updateArchiveButton();
   var activeTab = document.querySelector('.tab-btn.active');
   if (activeTab) {
@@ -3333,36 +3347,6 @@ function refreshAllViews() {
     if (tab === 'stats') renderStatsView();
     if (tab === 'team') renderTeamView();
   }
-}
-
-// =============================================================================
-// STATS
-// =============================================================================
-
-function updateStats() {
-  var container = document.getElementById('stats-row');
-  if (!container) return;
-  var filteredTasks = getFilteredTasks();
-  var total = filteredTasks.length;
-  var html = '';
-  if (showArchivedTasks) {
-    html += '<div class="stat-card stat-total"><div><div class="stat-label">' + (currentLang === 'fr' ? 'Archivées' : 'Archived') + '</div><div class="stat-value">' + total + '</div></div><div class="stat-icon">📦</div></div>';
-  } else {
-    html += '<div class="stat-card stat-total"><div><div class="stat-label">Total</div><div class="stat-value">' + total + '</div></div><div class="stat-icon">📋</div></div>';
-    var statuses = getKanbanStatuses();
-    for (var i = 0; i < statuses.length; i++) {
-      var s = statuses[i];
-      var count = filteredTasks.filter(function(t) { return t.Status === s.key; }).length;
-      var label = currentLang === 'fr' ? s.label_fr : s.label_en;
-      var color = s.color || '#94a3b8';
-      // Cohérent avec l'en-tête de colonne Kanban : emoji si configuré, sinon pastille colorée
-      var icon = (s.emoji && s.emoji.trim())
-        ? s.emoji.trim()
-        : '<span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:' + color + ';"></span>';
-      html += '<div class="stat-card"><div><div class="stat-label">' + sanitize(label) + '</div><div class="stat-value" style="color:' + color + '">' + count + '</div></div><div class="stat-icon">' + icon + '</div></div>';
-    }
-  }
-  container.innerHTML = html;
 }
 
 // =============================================================================
@@ -3480,6 +3464,17 @@ function renderCalendarDay(dayNum, date, dayTasks, isOtherMonth, isToday, isWeek
 
   if (dayTasks.length > maxTasks) {
     html += '<div class="day-more">+' + (dayTasks.length - maxTasks) + ' ' + (currentLang === 'fr' ? 'autres' : 'more') + '</div>';
+  }
+
+  // Jalons du jour (vues mois et semaine) : puces violettes cliquables
+  var dayMilestones = getMilestonesForDate(date);
+  var maxMilestones = isWeekView ? 10 : 2;
+  for (var msi = 0; msi < Math.min(dayMilestones.length, maxMilestones); msi++) {
+    var ms = dayMilestones[msi];
+    html += '<div class="day-task day-milestone' + (ms.st.Completed ? ' milestone-done' : '') + '" onclick="event.stopPropagation(); openEditTaskModal(' + ms.taskId + ')" title="' + sanitize(ms.st.Title) + '">◆ ' + sanitize(ms.st.Title) + '</div>';
+  }
+  if (dayMilestones.length > maxMilestones) {
+    html += '<div class="day-more">◆ +' + (dayMilestones.length - maxMilestones) + '</div>';
   }
 
   html += '</div></div>';
@@ -3604,6 +3599,26 @@ function getTasksForDate(date) {
   });
 }
 
+// Jalons du calendrier : sous-tâches de type jalon dont l'échéance tombe ce jour-là
+// (les jalons d'une tâche parente filtrée n'apparaissent pas)
+function getMilestonesForDate(date) {
+  var dateStart = new Date(date);
+  dateStart.setHours(0, 0, 0, 0);
+  var dateEnd = new Date(date);
+  dateEnd.setHours(23, 59, 59, 999);
+  var dateTs = dateStart.getTime() / 1000;
+  var dateEndTs = dateEnd.getTime() / 1000;
+  var result = [];
+  getFilteredTasks().forEach(function(task) {
+    getVisibleTaskSubtasks(task.id).forEach(function(st) {
+      if (isMilestone(st) && st.Due_Date && st.Due_Date >= dateTs && st.Due_Date <= dateEndTs) {
+        result.push({ st: st, taskId: task.id });
+      }
+    });
+  });
+  return result;
+}
+
 function renderCalendarWeekView() {
   // Calculate week start (Monday) based on offset
   var now = new Date();
@@ -3720,7 +3735,12 @@ function renderCalendarMobileView() {
       var task = dayTasks[i];
       html += '<div class="day-task status-' + task.Status + '" onclick="event.stopPropagation(); openEditTaskModal(' + task.id + ')" title="' + sanitize(task.Title) + '">' + sanitize(task.Title) + '</div>';
     }
-    if (dayTasks.length === 0) {
+    var dayMilestones = getMilestonesForDate(dayDate);
+    for (var msi = 0; msi < dayMilestones.length; msi++) {
+      var ms = dayMilestones[msi];
+      html += '<div class="day-task day-milestone' + (ms.st.Completed ? ' milestone-done' : '') + '" onclick="event.stopPropagation(); openEditTaskModal(' + ms.taskId + ')" title="' + sanitize(ms.st.Title) + '">◆ ' + sanitize(ms.st.Title) + '</div>';
+    }
+    if (dayTasks.length === 0 && dayMilestones.length === 0) {
       html += '<span class="mobile-no-task">\u2014</span>';
     }
     html += '</div></div>';
@@ -3814,7 +3834,8 @@ function renderCalendarDayView() {
     html += '<div class="day-empty">' + (currentLang === 'fr' ? 'Aucune tâche ce jour' : 'No tasks today') + '</div>';
   } else {
     dayTasks.forEach(function(task) {
-      var taskSubtasks = getVisibleTaskSubtasks(task.id);
+      // Calendrier (vue jour) : seuls les jalons apparaissent dans la liste des sous-tâches
+      var taskSubtasks = getVisibleTaskSubtasks(task.id).filter(function(st) { return isMilestone(st); });
       var completedSt = taskSubtasks.filter(function(st) { return st.Completed; }).length;
       var stColor = statusColors[task.Status] || '#94a3b8';
       var dueThisDay = task.Due_Date && task.Due_Date >= dayStartTs && task.Due_Date <= dayEndTs;
@@ -4408,6 +4429,7 @@ function renderTableView() {
   html += '<th style="' + thStyle + '" onclick="sortTable(\'Project\')">' + (currentLang === 'fr' ? 'Projet' : 'Project') + sortIcon('Project') + '</th>';
   html += '<th style="' + thStyle + '" onclick="sortTable(\'Status\')">' + t('colStatus') + sortIcon('Status') + '</th>';
   html += '<th style="' + thStyle + '" onclick="sortTable(\'Priority\')">' + t('colPriority') + sortIcon('Priority') + '</th>';
+  html += '<th>' + t('tag') + '</th>';
   html += '<th style="' + thStyle + '" onclick="sortTable(\'Assignee\')">' + t('colAssignee') + sortIcon('Assignee') + '</th>';
   html += '<th style="' + thStyle + '" onclick="sortTable(\'Start_Date\')">' + t('colStartDate') + sortIcon('Start_Date') + '</th>';
   html += '<th style="' + thStyle + '" onclick="sortTable(\'Due_Date\')">' + t('colDueDate') + sortIcon('Due_Date') + '</th>';
@@ -4440,6 +4462,12 @@ function renderTableView() {
     if (taskSubtasks.length > 0) html += ' <span class="st-badge">' + completedSt + '/' + taskSubtasks.length + '</span>';
     html += '</td>';
     html += '<td><span class="priority-dot ' + dotClass + '"></span> ' + priorityLabel(task.Priority) + '</td>';
+    var taskTagList = task.Tag ? task.Tag.split(',').map(function(tg) { return tg.trim(); }).filter(Boolean) : [];
+    html += '<td style="white-space:nowrap;">' + taskTagList.map(function(tg) {
+      var tgObj = tags.find(function(x) { return x.Name === tg; });
+      var tgColor = tgObj ? tgObj.Color : '#94a3b8';
+      return '<span style="font-size:10px;padding:1px 6px;border:1px solid ' + tgColor + '40;border-radius:4px;color:' + tgColor + ';font-weight:600;">' + sanitize(tg) + '</span>';
+    }).join(' ') + '</td>';
     var assigneeDisplay = task.Assignee ? task.Assignee.split(',').map(function(a) { return getUserDisplayName(a.trim()); }).join(', ') : '';
     html += '<td>' + (assigneeDisplay ? '<span class="assignee-chip">👤 ' + sanitize(assigneeDisplay) + '</span>' : '') + '</td>';
     html += '<td>' + (task.Start_Date ? formatDate(task.Start_Date) : t('notDefined')) + '</td>';
@@ -4469,6 +4497,12 @@ function renderTableView() {
       html += '<td><span class="status-badge" style="background:' + stStatusColor + '20;color:' + stStatusColor + ';">● ' + statusLabel(stStatus) + '</span></td>';
       // Priorité
       html += '<td><span class="priority-dot ' + stDotClass + '"></span> ' + priorityLabel(st.Priority) + '</td>';
+      var stTagList = st.Tag ? st.Tag.split(',').map(function(tg) { return tg.trim(); }).filter(Boolean) : [];
+      html += '<td style="white-space:nowrap;">' + stTagList.map(function(tg) {
+        var tgObj = tags.find(function(x) { return x.Name === tg; });
+        var tgColor = tgObj ? tgObj.Color : '#94a3b8';
+        return '<span style="font-size:10px;padding:1px 6px;border:1px solid ' + tgColor + '40;border-radius:4px;color:' + tgColor + ';font-weight:600;">' + sanitize(tg) + '</span>';
+      }).join(' ') + '</td>';
       // Assigné à
       html += '<td>' + (stAssignee ? '<span class="assignee-chip">👤 ' + sanitize(stAssignee) + '</span>' : '') + '</td>';
       // Date de début
@@ -4482,7 +4516,7 @@ function renderTableView() {
   }
 
   if (filtered.length === 0) {
-    html += '<tr><td colspan="8" style="text-align:center;padding:30px;color:#94a3b8;">' + t('noTasks') + '</td></tr>';
+    html += '<tr><td colspan="9" style="text-align:center;padding:30px;color:#94a3b8;">' + t('noTasks') + '</td></tr>';
   }
 
   html += '</tbody></table>';
@@ -6608,11 +6642,12 @@ function openEditTaskModal(taskId, preserveAssignees) {
       if (stBlocked && stBlocker) {
         html += '<span class="subtask-blocked-badge" title="' + t('blockedBy') + ' ' + sanitize(stBlocker.Title) + '">🔒</span>';
       }
-      // Meta : status + priority + assignee + due date
+      // Meta : tag + priority + assignee + due date
       html += '<span class="subtask-meta">';
-      if (st.Status && st.Status !== 'todo') {
-        var stStatusColor = st.Status === 'done' ? '#22c55e' : '#f59e0b';
-        html += '<span class="subtask-assignee-badge" style="background:' + stStatusColor + '20;color:' + stStatusColor + ';">' + (st.Status === 'done' ? '✅' : '🔄') + '</span>';
+      if (st.Tag) {
+        var stTagObj = tags.find(function(tg) { return tg.Name === st.Tag; });
+        var stTagColor = stTagObj ? stTagObj.Color : '#94a3b8';
+        html += '<span class="subtask-assignee-badge" style="border:1px solid ' + stTagColor + '40;color:' + stTagColor + ';">🏷️ ' + sanitize(st.Tag) + '</span>';
       }
       if (st.Priority && st.Priority !== 'medium') {
         var stPrioColor = st.Priority === 'high' ? '#ef4444' : '#94a3b8';
@@ -6638,28 +6673,24 @@ function openEditTaskModal(taskId, preserveAssignees) {
           html += '<div class="dod-item">';
           html += '<input type="checkbox" class="dod-checkbox"' + (d.done ? ' checked' : '') + ' onchange="toggleDoD(' + st.id + ', ' + di + ', this.checked)" />';
           html += '<span class="dod-text-view' + (d.done ? ' dod-text-done' : '') + '">' + sanitize(d.text || '') + '</span>';
+          if (d.assignee) html += '<span class="subtask-assignee-badge">👤 ' + sanitize(d.assignee) + '</span>';
           html += '</div>';
         });
         html += '</div>';
         html += '</div>';
       }
       // Edit view (hidden by default)
-      // Assignés multiples : liste de cases à cocher (comme les tâches, séparés par virgule)
-      var stAssignees = (st.Assignee || '').split(',').map(function(a) { return a.trim(); }).filter(Boolean);
-      var assigneeListHtml = '<div class="st-assignee-list" id="st-assignee-' + st.id + '" style="display:flex;flex-wrap:wrap;gap:4px 10px;max-height:84px;overflow-y:auto;padding:6px 8px;border:1px solid #e2e8f0;border-radius:8px;">';
-      if (users.length === 0) {
-        assigneeListHtml += '<span style="font-size:11px;color:#94a3b8;">' + (currentLang === 'fr' ? 'Aucun membre' : 'No members') + '</span>';
-      }
+      // Responsable : liste déroulante à choix unique (comme pour les tâches)
+      var stAssigneeSel = (st.Assignee || '').split(',').map(function(a) { return a.trim(); }).filter(Boolean)[0] || '';
+      var assigneeListHtml = '<select id="st-assignee-' + st.id + '" class="st-dep-select" style="width:100%;">';
+      assigneeListHtml += '<option value="">--</option>';
       for (var ui = 0; ui < users.length; ui++) {
         var uName = users[ui].Name;
-        var uChk = stAssignees.indexOf(uName) !== -1 ? ' checked' : '';
-        assigneeListHtml += '<label style="display:inline-flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;white-space:nowrap;"><input type="checkbox" value="' + sanitize(uName) + '"' + uChk + '> ' + sanitize(uName) + '</label>';
+        assigneeListHtml += '<option value="' + sanitize(uName) + '"' + (uName === stAssigneeSel ? ' selected' : '') + '>' + sanitize(uName) + '</option>';
       }
-      assigneeListHtml += '</div>';
+      assigneeListHtml += '</select>';
       var stDueDateInput = st.Due_Date ? new Date(st.Due_Date * 1000).toISOString().split('T')[0] : '';
-      var stStatus = st.Status || 'todo';
       var stPriority = st.Priority || 'medium';
-      var stLbl = { todo: t('statusTodo'), progress: t('statusProgress'), done: t('statusDone') };
       var prLbl = { high: t('priorityHigh'), medium: t('priorityMedium'), low: t('priorityLow') };
       html += '<div class="subtask-edit-form" id="st-edit-' + st.id + '">';
       // Title
@@ -6675,17 +6706,15 @@ function openEditTaskModal(taskId, preserveAssignees) {
       html += '</div>';
       html += '<input type="hidden" id="st-type-' + st.id + '" value="' + stType + '">';
       html += '</div>';
-      // Status pills — statuts personnalisés (getKanbanStatuses), avec couleur réelle
+      // Tag : liste déroulante à choix unique (comme pour les tâches)
       html += '<div>';
-      html += '<div class="st-pill-label">' + (currentLang === 'fr' ? 'Statut' : 'Status') + '</div>';
-      html += '<div class="st-pill-group" id="st-status-group-' + st.id + '">';
-      getKanbanStatuses().forEach(function(s) {
-        var sLbl = (s.emoji ? s.emoji + ' ' : '') + (currentLang === 'fr' ? s.label_fr : s.label_en);
-        var sActiveStyle = (stStatus === s.key) ? ('background:' + (s.color || '#3b82f6') + ';color:#fff;border-color:' + (s.color || '#3b82f6') + ';') : '';
-        html += '<button type="button" class="st-pill" style="' + sActiveStyle + '" data-key="' + s.key + '" onclick="setStStatus(' + st.id + ',\'' + s.key + '\',this)">' + sanitize(sLbl) + '</button>';
-      });
-      html += '</div>';
-      html += '<input type="hidden" id="st-status-' + st.id + '" value="' + stStatus + '">';
+      html += '<div class="st-pill-label">🏷️ ' + t('tag') + '</div>';
+      html += '<select id="st-tag-' + st.id + '" class="st-dep-select" style="width:100%;">';
+      html += '<option value="">--</option>';
+      for (var stTi = 0; stTi < tags.length; stTi++) {
+        html += '<option value="' + sanitize(tags[stTi].Name) + '"' + (tags[stTi].Name === st.Tag ? ' selected' : '') + '>' + sanitize(tags[stTi].Name) + '</option>';
+      }
+      html += '</select>';
       html += '</div>';
       // Priority pills
       html += '<div>';
@@ -6697,12 +6726,9 @@ function openEditTaskModal(taskId, preserveAssignees) {
       html += '</div>';
       html += '<input type="hidden" id="st-priority-' + st.id + '" value="' + stPriority + '">';
       html += '</div>';
-      // Assignés (multiples)
+      // Responsable (choix unique)
       html += '<div>';
-      html += '<div class="st-pill-label">' + t('subtaskAssignee') + (currentLang === 'fr' ? ' (plusieurs possibles)' : ' (multiple)') + '</div>';
-      if (users.length > 1) {
-        html += '<input type="text" id="st-assignee-search-' + st.id + '" oninput="filterStAssignees(' + st.id + ', this.value)" placeholder="' + (currentLang === 'fr' ? '🔍 Rechercher un membre...' : '🔍 Search a member...') + '" style="width:100%;padding:5px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;margin-bottom:4px;" autocomplete="off">';
-      }
+      html += '<div class="st-pill-label">' + t('subtaskAssignee') + '</div>';
       html += assigneeListHtml;
       html += '</div>';
       // Date + hours row
@@ -6715,7 +6741,7 @@ function openEditTaskModal(taskId, preserveAssignees) {
       // Dépendance entre sous-tâches (bloquée par une autre sous-tâche de la tâche)
       var stOtherSubtasks = taskSubtasks.filter(function(s2) { return s2.id !== st.id; });
       if (stOtherSubtasks.length > 0) {
-        html += '<div>';
+        html += '<div class="st-span2">';
         html += '<div class="st-pill-label">🔗 ' + t('blockedBy') + '</div>';
         html += '<select id="st-dep-' + st.id + '" class="st-dep-select" onchange="setSubtaskDependency(' + st.id + ', ' + task.id + ', this.value)">';
         html += '<option value="">-- ' + t('noDependencies') + ' --</option>';
@@ -6731,9 +6757,17 @@ function openEditTaskModal(taskId, preserveAssignees) {
       if (dodList.length > 0) {
         html += '<div class="subtask-dod-list' + (dodDone === dodList.length ? ' dod-all-done' : '') + '">';
         dodList.forEach(function(d, di) {
-          html += '<div class="dod-item">';
+          html += '<div class="dod-item" id="st-dod-item-' + st.id + '-' + di + '" ondragstart="dodDragStart(event, ' + st.id + ', ' + di + ')" ondragover="dodDragOver(event)" ondrop="dodDrop(event, ' + st.id + ', ' + di + ')" ondragend="dodDragEnd(event)">';
+          html += '<span class="dod-drag-handle" onmousedown="dodHandleMouseDown(this.parentNode)" onmouseup="dodHandleMouseUp(this.parentNode)" title="' + (currentLang === 'fr' ? 'Réordonner' : 'Reorder') + '">⋮⋮</span>';
           html += '<input type="checkbox" class="dod-checkbox"' + (d.done ? ' checked' : '') + ' onchange="toggleDoD(' + st.id + ', ' + di + ', this.checked)" />';
           html += '<input type="text" class="dod-text" value="' + sanitize(d.text || '') + '" onchange="renameDoD(' + st.id + ', ' + di + ', this)" />';
+          // Responsable par critère : liste déroulante compacte à choix unique
+          html += '<select class="dod-assignee" onchange="assignDoD(' + st.id + ', ' + di + ', this)" title="' + t('subtaskAssignee') + '">';
+          html += '<option value="">👤 --</option>';
+          for (var du = 0; du < users.length; du++) {
+            html += '<option value="' + sanitize(users[du].Name) + '"' + (users[du].Name === (d.assignee || '') ? ' selected' : '') + '>' + sanitize(users[du].Name) + '</option>';
+          }
+          html += '</select>';
           html += '<button type="button" class="dod-delete" onclick="deleteDoD(' + st.id + ', ' + di + ')" title="' + t('delete') + '">✕</button>';
           html += '</div>';
         });
@@ -6768,144 +6802,6 @@ function openEditTaskModal(taskId, preserveAssignees) {
   html += '<div class="subtask-add-row">';
   html += '<input type="text" id="new-subtask-input" class="subtask-input" placeholder="' + t('subtaskPlaceholder') + '" onkeypress="if(event.key===\'Enter\')addSubtask(' + task.id + ')" />';
   html += '<button class="subtask-add-btn" onclick="addSubtask(' + task.id + ')">+</button>';
-  html += '</div>';
-  html += '</div>';
-
-  // === DEPENDENCIES SECTION ===
-  var taskDeps = getTaskDependencies(task.id);
-  var taskBlocks = getTasksDependingOn(task.id);
-  html += '<div class="dependencies-section">';
-  html += '<div class="dependencies-header">';
-  html += '<span class="detail-field-icon">🔗</span>';
-  html += '<span class="detail-field-label">' + t('dependencies') + '</span>';
-  html += '</div>';
-  
-  // Blocked by
-  html += '<div class="dep-subsection">';
-  html += '<div class="dep-label">' + t('blockedBy') + ':</div>';
-  if (taskDeps.length === 0) {
-    html += '<div class="dep-empty">' + t('noDependencies') + '</div>';
-  } else {
-    html += '<div class="dep-list">';
-    for (var di = 0; di < taskDeps.length; di++) {
-      var dep = taskDeps[di];
-      var depDone = dep.Status === 'done';
-      html += '<div class="dep-item' + (depDone ? ' dep-done' : '') + '">';
-      html += '<span class="dep-status">' + (depDone ? '✅' : '⏳') + '</span>';
-      html += '<span class="dep-title">' + sanitize(dep.Title) + '</span>';
-      html += '<button class="dep-remove" onclick="removeDependency(' + task.id + ', ' + dep.id + ')">✕</button>';
-      html += '</div>';
-    }
-    html += '</div>';
-  }
-  html += '</div>';
-  
-  // Blocks (tasks depending on this one)
-  if (taskBlocks.length > 0) {
-    html += '<div class="dep-subsection">';
-    html += '<div class="dep-label">' + t('blocks') + ':</div>';
-    html += '<div class="dep-list">';
-    for (var bi = 0; bi < taskBlocks.length; bi++) {
-      var blk = taskBlocks[bi];
-      html += '<div class="dep-item dep-blocks">';
-      html += '<span class="dep-title">' + sanitize(blk.Title) + '</span>';
-      html += '</div>';
-    }
-    html += '</div>';
-    html += '</div>';
-  }
-  
-  // Add dependency
-  html += '<div class="dep-add-row">';
-  html += '<select id="dep-select" onchange="if (this.value) addDependency(' + task.id + ')">';
-  html += '<option value="">-- ' + t('selectTask') + ' --</option>';
-  var availableTasks = getFilteredTasks().filter(function(t) {
-    return t.id !== task.id && !taskDeps.some(function(d) { return d.id === t.id; });
-  });
-  for (var ti = 0; ti < availableTasks.length; ti++) {
-    html += '<option value="' + availableTasks[ti].id + '">' + sanitize(availableTasks[ti].Title) + '</option>';
-  }
-  html += '</select>';
-  html += '<button class="dep-add-btn" onclick="addDependency(' + task.id + ')">+</button>';
-  html += '</div>';
-  html += '</div>';
-
-  // === CUSTOM FIELDS SECTION ===
-  if (customFields.length > 0) {
-    html += '<div class="custom-fields-section">';
-    html += '<div class="custom-fields-header">';
-    html += '<span class="detail-field-icon">📋</span>';
-    html += '<span class="detail-field-label">' + t('customFields') + '</span>';
-    if (isOwner) html += '<button class="cf-manage-btn" onclick="openCustomFieldsModal()">⚙️</button>';
-    html += '</div>';
-    html += '<div class="custom-fields-list">';
-    for (var cfi = 0; cfi < customFields.length; cfi++) {
-      var cf = customFields[cfi];
-      var cfValue = getTaskCustomFieldValue(task.id, cf.id);
-      html += '<div class="custom-field-item">';
-      html += '<label class="cf-label">' + sanitize(cf.Name) + '</label>';
-      html += renderCustomFieldInput(cf, task.id, cfValue);
-      html += '</div>';
-    }
-    html += '</div>';
-    html += '</div>';
-  } else if (isOwner) {
-    html += '<div class="custom-fields-section">';
-    html += '<div class="custom-fields-header">';
-    html += '<span class="detail-field-icon">📋</span>';
-    html += '<span class="detail-field-label">' + t('customFields') + '</span>';
-    html += '<button class="cf-manage-btn" onclick="openCustomFieldsModal()">⚙️</button>';
-    html += '</div>';
-    html += '<div class="cf-empty">' + t('noCustomFields') + '</div>';
-    html += '</div>';
-  }
-
-  // === ATTACHMENTS SECTION (D2) ===
-  html += '<div class="attachments-section">';
-  html += '<div class="comments-header">';
-  html += '<span class="detail-field-icon">📎</span>';
-  html += '<span class="detail-field-label">' + (currentLang === 'fr' ? 'Pièces jointes' : 'Attachments') + '</span>';
-  html += '<span class="comment-badge">' + getTaskAttachments(task.id).length + '</span>';
-  html += '</div>';
-  html += '<div class="attachments-list" id="attachments-list-' + task.id + '"></div>';
-  html += '<div class="attach-add-row">';
-  html += '<label class="attach-upload-btn">📎 ' + (currentLang === 'fr' ? 'Ajouter un fichier' : 'Add file') + '<input type="file" multiple style="display:none;" onchange="uploadTaskAttachments(' + task.id + ', Array.from(this.files)); this.value=\'\';"></label>';
-  html += '<span class="attach-status" id="attach-status-' + task.id + '"></span>';
-  html += '</div>';
-  html += '<div class="attach-hint">' + (currentLang === 'fr' ? 'Tous formats · max 5 Mo par fichier (images compressées automatiquement)' : 'All formats · max 5MB per file (images auto-compressed)') + '</div>';
-  html += '</div>';
-
-  // === COMMENTS SECTION ===
-  var taskComments = getTaskComments(task.id);
-  html += '<div class="comments-section">';
-  html += '<div class="comments-header">';
-  html += '<span class="detail-field-icon">💬</span>';
-  html += '<span class="detail-field-label">' + t('comments') + '</span>';
-  html += '<span class="comment-badge">' + taskComments.length + '</span>';
-  html += '</div>';
-  
-  html += '<div class="comments-list" id="comments-list">';
-  if (taskComments.length === 0) {
-    html += '<div class="comments-empty">' + t('noComments') + '</div>';
-  } else {
-    for (var ci = 0; ci < taskComments.length; ci++) {
-      var cmt = taskComments[ci];
-      html += '<div class="comment-item">';
-      html += '<div class="comment-header">';
-      html += '<span class="comment-author">👤 ' + sanitize(cmt.Author || 'Anonyme') + '</span>';
-      html += '<span class="comment-time">' + formatTimeAgo(cmt.Created_At) + '</span>';
-      if (isOwner) html += '<button class="comment-delete" onclick="deleteComment(' + cmt.id + ', ' + task.id + ')">✕</button>';
-      html += '</div>';
-      html += '<div class="comment-content">' + sanitize(cmt.Content) + '</div>';
-      html += '</div>';
-    }
-  }
-  html += '</div>';
-  
-  // Add comment input
-  html += '<div class="comment-add-row">';
-  html += '<textarea id="new-comment-input" class="comment-input" placeholder="' + t('commentPlaceholder') + '" rows="2"></textarea>';
-  html += '<button class="comment-add-btn" onclick="addComment(' + task.id + ')">' + t('addComment') + '</button>';
   html += '</div>';
   html += '</div>';
 
@@ -7027,6 +6923,144 @@ function openEditTaskModal(taskId, preserveAssignees) {
     html += '<button class="btn btn-secondary btn-sm" onclick="generateOccurrences(' + task.id + ', \'year\')">' + t('generateYear') + '</button>';
     html += '</div>';
   }
+  html += '</div>';
+
+  // === CUSTOM FIELDS SECTION ===
+  if (customFields.length > 0) {
+    html += '<div class="custom-fields-section">';
+    html += '<div class="custom-fields-header">';
+    html += '<span class="detail-field-icon">📋</span>';
+    html += '<span class="detail-field-label">' + t('customFields') + '</span>';
+    if (isOwner) html += '<button class="cf-manage-btn" onclick="openCustomFieldsModal()">⚙️</button>';
+    html += '</div>';
+    html += '<div class="custom-fields-list">';
+    for (var cfi = 0; cfi < customFields.length; cfi++) {
+      var cf = customFields[cfi];
+      var cfValue = getTaskCustomFieldValue(task.id, cf.id);
+      html += '<div class="custom-field-item">';
+      html += '<label class="cf-label">' + sanitize(cf.Name) + '</label>';
+      html += renderCustomFieldInput(cf, task.id, cfValue);
+      html += '</div>';
+    }
+    html += '</div>';
+    html += '</div>';
+  } else if (isOwner) {
+    html += '<div class="custom-fields-section">';
+    html += '<div class="custom-fields-header">';
+    html += '<span class="detail-field-icon">📋</span>';
+    html += '<span class="detail-field-label">' + t('customFields') + '</span>';
+    html += '<button class="cf-manage-btn" onclick="openCustomFieldsModal()">⚙️</button>';
+    html += '</div>';
+    html += '<div class="cf-empty">' + t('noCustomFields') + '</div>';
+    html += '</div>';
+  }
+
+  // === ATTACHMENTS SECTION (D2) ===
+  html += '<div class="attachments-section">';
+  html += '<div class="comments-header">';
+  html += '<span class="detail-field-icon">📎</span>';
+  html += '<span class="detail-field-label">' + (currentLang === 'fr' ? 'Pièces jointes' : 'Attachments') + '</span>';
+  html += '<span class="comment-badge">' + getTaskAttachments(task.id).length + '</span>';
+  html += '</div>';
+  html += '<div class="attachments-list" id="attachments-list-' + task.id + '"></div>';
+  html += '<div class="attach-add-row">';
+  html += '<label class="attach-upload-btn">📎 ' + (currentLang === 'fr' ? 'Ajouter un fichier' : 'Add file') + '<input type="file" multiple style="display:none;" onchange="uploadTaskAttachments(' + task.id + ', Array.from(this.files)); this.value=\'\';"></label>';
+  html += '<span class="attach-status" id="attach-status-' + task.id + '"></span>';
+  html += '</div>';
+  html += '<div class="attach-hint">' + (currentLang === 'fr' ? 'Tous formats · max 5 Mo par fichier (images compressées automatiquement)' : 'All formats · max 5MB per file (images auto-compressed)') + '</div>';
+  html += '</div>';
+
+  // === COMMENTS SECTION ===
+  var taskComments = getTaskComments(task.id);
+  html += '<div class="comments-section">';
+  html += '<div class="comments-header">';
+  html += '<span class="detail-field-icon">💬</span>';
+  html += '<span class="detail-field-label">' + t('comments') + '</span>';
+  html += '<span class="comment-badge">' + taskComments.length + '</span>';
+  html += '</div>';
+  
+  html += '<div class="comments-list" id="comments-list">';
+  if (taskComments.length === 0) {
+    html += '<div class="comments-empty">' + t('noComments') + '</div>';
+  } else {
+    for (var ci = 0; ci < taskComments.length; ci++) {
+      var cmt = taskComments[ci];
+      html += '<div class="comment-item">';
+      html += '<div class="comment-header">';
+      html += '<span class="comment-author">👤 ' + sanitize(cmt.Author || 'Anonyme') + '</span>';
+      html += '<span class="comment-time">' + formatTimeAgo(cmt.Created_At) + '</span>';
+      if (isOwner) html += '<button class="comment-delete" onclick="deleteComment(' + cmt.id + ', ' + task.id + ')">✕</button>';
+      html += '</div>';
+      html += '<div class="comment-content">' + sanitize(cmt.Content) + '</div>';
+      html += '</div>';
+    }
+  }
+  html += '</div>';
+  
+  // Add comment input
+  html += '<div class="comment-add-row">';
+  html += '<textarea id="new-comment-input" class="comment-input" placeholder="' + t('commentPlaceholder') + '" rows="2"></textarea>';
+  html += '<button class="comment-add-btn" onclick="addComment(' + task.id + ')">' + t('addComment') + '</button>';
+  html += '</div>';
+  html += '</div>';
+
+  // === DEPENDENCIES SECTION ===
+  var taskDeps = getTaskDependencies(task.id);
+  var taskBlocks = getTasksDependingOn(task.id);
+  html += '<div class="dependencies-section">';
+  html += '<div class="dependencies-header">';
+  html += '<span class="detail-field-icon">🔗</span>';
+  html += '<span class="detail-field-label">' + t('dependencies') + '</span>';
+  html += '</div>';
+  
+  // Blocked by
+  html += '<div class="dep-subsection">';
+  html += '<div class="dep-label">' + t('blockedBy') + ':</div>';
+  if (taskDeps.length === 0) {
+    html += '<div class="dep-empty">' + t('noDependencies') + '</div>';
+  } else {
+    html += '<div class="dep-list">';
+    for (var di = 0; di < taskDeps.length; di++) {
+      var dep = taskDeps[di];
+      var depDone = dep.Status === 'done';
+      html += '<div class="dep-item' + (depDone ? ' dep-done' : '') + '">';
+      html += '<span class="dep-status">' + (depDone ? '✅' : '⏳') + '</span>';
+      html += '<span class="dep-title">' + sanitize(dep.Title) + '</span>';
+      html += '<button class="dep-remove" onclick="removeDependency(' + task.id + ', ' + dep.id + ')">✕</button>';
+      html += '</div>';
+    }
+    html += '</div>';
+  }
+  html += '</div>';
+  
+  // Blocks (tasks depending on this one)
+  if (taskBlocks.length > 0) {
+    html += '<div class="dep-subsection">';
+    html += '<div class="dep-label">' + t('blocks') + ':</div>';
+    html += '<div class="dep-list">';
+    for (var bi = 0; bi < taskBlocks.length; bi++) {
+      var blk = taskBlocks[bi];
+      html += '<div class="dep-item dep-blocks">';
+      html += '<span class="dep-title">' + sanitize(blk.Title) + '</span>';
+      html += '</div>';
+    }
+    html += '</div>';
+    html += '</div>';
+  }
+  
+  // Add dependency
+  html += '<div class="dep-add-row">';
+  html += '<select id="dep-select" onchange="if (this.value) addDependency(' + task.id + ')">';
+  html += '<option value="">-- ' + t('selectTask') + ' --</option>';
+  var availableTasks = getFilteredTasks().filter(function(t) {
+    return t.id !== task.id && !taskDeps.some(function(d) { return d.id === t.id; });
+  });
+  for (var ti = 0; ti < availableTasks.length; ti++) {
+    html += '<option value="' + availableTasks[ti].id + '">' + sanitize(availableTasks[ti].Title) + '</option>';
+  }
+  html += '</select>';
+  html += '<button class="dep-add-btn" onclick="addDependency(' + task.id + ')">+</button>';
+  html += '</div>';
   html += '</div>';
 
   html += '</div>'; // end right
@@ -7411,7 +7445,7 @@ function isDoDFulfilled(subtask) {
 
 function copyDoD(subtask) {
   return getDoD(subtask).map(function(d) {
-    return { text: d.text || '', done: !!d.done };
+    return { text: d.text || '', done: !!d.done, assignee: d.assignee || '' };
   });
 }
 
@@ -7467,7 +7501,7 @@ async function addDoD(subtaskId, criterionText) {
   var dodList = copyDoD(subtask);
   // Nouveau critère créé décoché : si la sous-tâche était terminée, elle
   // repasse en cours (la complétion est dérivée du DoD).
-  dodList.push({ text: (criterionText && criterionText.trim()) ? criterionText.trim() : t('newCriterion'), done: false });
+  dodList.push({ text: (criterionText && criterionText.trim()) ? criterionText.trim() : t('newCriterion'), done: false, assignee: '' });
   await applyDoDUpdate(subtask, dodList, true);
   showToast(t('dodCriterionAdded'), 'info');
 }
@@ -7505,6 +7539,73 @@ async function renameDoD(subtaskId, index, input) {
   showToast(t('dodCriterionUpdated'), 'info');
 }
 
+async function assignDoD(subtaskId, index, select) {
+  var subtask = subtasks.find(function(st) { return st.id === subtaskId; });
+  if (!subtask) return;
+  var dodList = copyDoD(subtask);
+  if (!dodList[index]) return;
+  dodList[index].assignee = (select.value || '').trim();
+  await applyDoDUpdate(subtask, dodList, true);
+  showToast(t('dodCriterionUpdated'), 'info');
+}
+
+// Réordonner les critères du DoD : glisser-déposer depuis la poignée ⋮⋮
+// (le drag n'est actif que depuis la poignée, pour ne pas gêner la saisie de texte)
+var dodDragData = null;
+function dodHandleMouseDown(row) {
+  if (row) row.setAttribute('draggable', 'true');
+}
+function dodHandleMouseUp(row) {
+  if (row) row.removeAttribute('draggable');
+}
+function dodDragStart(ev, subtaskId, index) {
+  dodDragData = { subtaskId: subtaskId, index: index };
+  if (ev.dataTransfer) {
+    ev.dataTransfer.effectAllowed = 'move';
+    try { ev.dataTransfer.setData('text/plain', String(index)); } catch (e) {}
+  }
+  var row = ev.target && ev.target.closest ? ev.target.closest('.dod-item') : null;
+  if (row) row.classList.add('dod-dragging');
+}
+function dodDragOver(ev) {
+  ev.preventDefault();
+  if (ev.dataTransfer) ev.dataTransfer.dropEffect = 'move';
+  var row = ev.target && ev.target.closest ? ev.target.closest('.dod-item') : null;
+  if (row) {
+    document.querySelectorAll('.dod-item.dod-drop-target').forEach(function(r) {
+      if (r !== row) r.classList.remove('dod-drop-target');
+    });
+    row.classList.add('dod-drop-target');
+  }
+}
+function dodDrop(ev, subtaskId, dropIndex) {
+  ev.preventDefault();
+  var drag = dodDragData;
+  dodDragData = null;
+  if (!drag || drag.subtaskId !== subtaskId || drag.index === dropIndex) return;
+  moveDoD(subtaskId, drag.index, dropIndex);
+}
+function dodDragEnd(ev) {
+  dodDragData = null;
+  var row = ev.target && ev.target.closest ? ev.target.closest('.dod-item') : null;
+  if (row) {
+    row.removeAttribute('draggable');
+    row.classList.remove('dod-dragging');
+  }
+  document.querySelectorAll('.dod-item.dod-drop-target').forEach(function(r) {
+    r.classList.remove('dod-drop-target');
+  });
+}
+async function moveDoD(subtaskId, fromIndex, toIndex) {
+  var subtask = subtasks.find(function(st) { return st.id === subtaskId; });
+  if (!subtask) return;
+  var dodList = copyDoD(subtask);
+  if (fromIndex < 0 || fromIndex >= dodList.length) return;
+  var moved = dodList.splice(fromIndex, 1)[0];
+  dodList.splice(toIndex, 0, moved);
+  await applyDoDUpdate(subtask, dodList, true);
+}
+
 async function deleteDoD(subtaskId, index) {
   var subtask = subtasks.find(function(st) { return st.id === subtaskId; });
   if (!subtask) return;
@@ -7515,20 +7616,7 @@ async function deleteDoD(subtaskId, index) {
   showToast(t('dodCriterionDeleted'), 'info');
 }
 
-// Toggle pill selection for status/priority
-// Sélecteur de statut de sous-tâche (statuts personnalisés avec couleur réelle)
-function setStStatus(subtaskId, value, btn) {
-  var hidden = document.getElementById('st-status-' + subtaskId);
-  if (hidden) hidden.value = value;
-  var grp = btn.parentNode;
-  if (grp) grp.querySelectorAll('.st-pill').forEach(function(p) {
-    p.className = 'st-pill'; p.style.background = ''; p.style.color = ''; p.style.borderColor = '';
-  });
-  var def = getKanbanStatuses().find(function(s) { return s.key === value; });
-  var color = (def && def.color) ? def.color : '#3b82f6';
-  btn.style.background = color; btn.style.color = '#fff'; btn.style.borderColor = color;
-}
-
+// Toggle pill selection for type/priority
 // B2 : sélecteur de type de sous-tâche (sous-tâche / jalon)
 function setStType(subtaskId, value, btn) {
   var hidden = document.getElementById('st-type-' + subtaskId);
@@ -7557,7 +7645,7 @@ function startEditSubtask(subtaskId) {
   var editEl = document.getElementById('st-edit-' + subtaskId);
   if (viewEl) viewEl.style.display = 'none';
   if (viewDodEl) viewDodEl.style.display = 'none';
-  if (editEl) { editEl.style.display = 'flex'; var t = document.getElementById('st-title-' + subtaskId); if (t) t.focus(); }
+  if (editEl) { editEl.style.display = 'grid'; var t = document.getElementById('st-title-' + subtaskId); if (t) t.focus(); }
 }
 
 function cancelEditSubtask(subtaskId) {
@@ -7573,21 +7661,13 @@ function cancelEditSubtask(subtaskId) {
 // après un re-render de la modale (ajout/modif/suppression d'un critère DoD).
 function snapshotSubtaskForm(subtaskId) {
   var snap = null;
-  ['st-title-','st-desc-','st-type-','st-status-','st-priority-','st-start-','st-due-','st-hours-','st-assignee-search-'].forEach(function(pfx) {
+  ['st-title-','st-desc-','st-type-','st-tag-','st-priority-','st-start-','st-due-','st-hours-','st-assignee-'].forEach(function(pfx) {
     var el = document.getElementById(pfx + subtaskId);
     if (el) {
       if (!snap) snap = {};
       snap[pfx] = el.value;
     }
   });
-  var box = document.getElementById('st-assignee-' + subtaskId);
-  if (box) {
-    if (!snap) snap = {};
-    snap.assignees = [];
-    box.querySelectorAll('input[type="checkbox"]').forEach(function(c) {
-      if (c.checked) snap.assignees.push(c.value);
-    });
-  }
   return snap;
 }
 
@@ -7596,24 +7676,13 @@ function snapshotSubtaskForm(subtaskId) {
 function restoreSubtaskForm(subtaskId, snap) {
   if (snap) startEditSubtask(subtaskId);   // formulaire fermé avant l'opération : ne pas l'ouvrir
   if (!snap) return;
-  ['st-title-','st-desc-','st-start-','st-due-','st-hours-'].forEach(function(pfx) {
+  ['st-title-','st-desc-','st-tag-','st-assignee-','st-start-','st-due-','st-hours-'].forEach(function(pfx) {
     var el = document.getElementById(pfx + subtaskId);
     if (el && snap[pfx] !== undefined) el.value = snap[pfx];
   });
-  var search = document.getElementById('st-assignee-search-' + subtaskId);
-  if (search && snap['st-assignee-search-'] !== undefined) {
-    search.value = snap['st-assignee-search-'];
-    filterStAssignees(subtaskId, snap['st-assignee-search-']);
-  }
-  var box = document.getElementById('st-assignee-' + subtaskId);
-  if (box && snap.assignees) {
-    box.querySelectorAll('input[type="checkbox"]').forEach(function(c) {
-      c.checked = snap.assignees.indexOf(c.value) !== -1;
-    });
-  }
   // Pastilles type/statut/priorité : clique le bouton correspondant pour
   // resynchroniser le visuel et le champ caché sur la valeur figée.
-  [['st-type-group-', snap['st-type-']], ['st-status-group-', snap['st-status-']], ['st-priority-group-', snap['st-priority-']]].forEach(function(pair) {
+  [['st-type-group-', snap['st-type-']], ['st-priority-group-', snap['st-priority-']]].forEach(function(pair) {
     if (pair[1] === undefined) return;
     var grp = document.getElementById(pair[0] + subtaskId);
     var btn = grp ? grp.querySelector('[data-key="' + pair[1] + '"]') : null;
@@ -7622,40 +7691,26 @@ function restoreSubtaskForm(subtaskId, snap) {
   var dodInput = document.getElementById('st-dod-new-' + subtaskId);
   if (dodInput) dodInput.focus();
 }
-// Filtre la liste des assignés d'une sous-tâche selon la saisie clavier
-function filterStAssignees(subtaskId, query) {
-  var box = document.getElementById('st-assignee-' + subtaskId);
-  if (!box) return;
-  var q = (query || '').toLowerCase().trim();
-  box.querySelectorAll('label').forEach(function(lbl) {
-    var name = (lbl.textContent || '').toLowerCase();
-    lbl.style.display = (!q || name.indexOf(q) !== -1) ? '' : 'none';
-  });
-}
 
 async function saveEditSubtask(subtaskId, parentTaskId) {
   var titleInput    = document.getElementById('st-title-'    + subtaskId);
   var descInput     = document.getElementById('st-desc-'     + subtaskId);
-  var statusSel     = document.getElementById('st-status-'   + subtaskId);
+  var tagSel       = document.getElementById('st-tag-'     + subtaskId);
   var prioritySel   = document.getElementById('st-priority-' + subtaskId);
-  var assigneeBox   = document.getElementById('st-assignee-' + subtaskId);
+  var assigneeSel   = document.getElementById('st-assignee-' + subtaskId);
   var startDateInput= document.getElementById('st-start-'    + subtaskId);
   var dueDateInput  = document.getElementById('st-due-'      + subtaskId);
   var hoursInput    = document.getElementById('st-hours-'    + subtaskId);
   if (!titleInput) return;
   var newTitle = titleInput.value.trim();
   if (!newTitle) return;
-  var newAssignee = '';
-  if (assigneeBox) {
-    var checked = assigneeBox.querySelectorAll('input[type="checkbox"]:checked');
-    newAssignee = Array.prototype.map.call(checked, function(c) { return c.value; }).join(', ');
-  }
+  var newAssignee = assigneeSel ? assigneeSel.value : '';
   var newStartDate = startDateInput && startDateInput.value ? Math.floor(new Date(startDateInput.value).getTime() / 1000) : null;
   var newDueDate = dueDateInput && dueDateInput.value ? Math.floor(new Date(dueDateInput.value).getTime() / 1000) : null;
-  var newStatus = statusSel ? statusSel.value : 'todo';
   var typeEl = document.getElementById('st-type-' + subtaskId);
-  // Definition of Done : quand des critères existent, le statut en découle
+  // Statut : plus édité dans le formulaire ; conservé tel quel, découle du DoD quand il existe
   var _svSt = subtasks.find(function(sv) { return sv.id === subtaskId; });
+  var newStatus = (_svSt && _svSt.Status) || 'todo';
   if (_svSt && getDoD(_svSt).length > 0) {
     if (isDoDFulfilled(_svSt)) {
       newStatus = 'done';
@@ -7671,6 +7726,7 @@ async function saveEditSubtask(subtaskId, parentTaskId) {
     Completed: newStatus === 'done',
     Priority: prioritySel ? prioritySel.value : 'medium',
     Assignee: newAssignee,
+    Tag: tagSel ? tagSel.value : '',
     Estimated_Hours: hoursInput && hoursInput.value ? parseFloat(hoursInput.value) : null,
     Type: typeEl ? typeEl.value : 'subtask'
   };
