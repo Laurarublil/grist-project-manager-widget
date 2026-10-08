@@ -1145,9 +1145,15 @@ function getTaskSubtasks(taskId) {
 // (la tâche parente reste visible, avec zéro sous-tâche le cas échéant).
 function getVisibleTaskSubtasks(taskId) {
   var list = getTaskSubtasks(taskId);
-  if (!currentFilterAssignee) return list;
-  var identSet = personIdentSet(currentFilterAssignee);
-  return list.filter(function(st) { return assigneeListHas(st.Assignee, identSet); });
+  if (currentFilterAssignee) {
+    var identSet = personIdentSet(currentFilterAssignee);
+    list = list.filter(function(st) { return assigneeListHas(st.Assignee, identSet); });
+  }
+  if (currentFilterTag) {
+    var tagKey = String(currentFilterTag).trim();
+    list = list.filter(function(st) { return String(st.Tag || '').trim() === tagKey; });
+  }
+  return list;
 }
 
 function getTaskProgress(task) {
@@ -3298,7 +3304,11 @@ function getFilteredTasks() {
   }
   if (currentFilterTag) {
     var tagKey = String(currentFilterTag).trim();
-    result = result.filter(function(t) { return String(t.Tag || '').trim() === tagKey; });
+    result = result.filter(function(t) {
+      if (String(t.Tag || '').trim() === tagKey) return true;
+      // La tâche parente reste visible si une de ses sous-tâches porte ce tag
+      return getTaskSubtasks(t.id).some(function(st) { return String(st.Tag || '').trim() === tagKey; });
+    });
   }
   if (mineOnly && !currentProjectId) {
     var myIds = myProjectIdSet();
