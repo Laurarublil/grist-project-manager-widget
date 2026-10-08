@@ -3798,7 +3798,8 @@ function renderCalendarDayView() {
     html += '<div class="day-empty">' + (currentLang === 'fr' ? 'Aucune tâche ce jour' : 'No tasks today') + '</div>';
   } else {
     dayTasks.forEach(function(task) {
-      var taskSubtasks = getVisibleTaskSubtasks(task.id);
+      // Calendrier (vue jour) : seuls les jalons apparaissent dans la liste des sous-tâches
+      var taskSubtasks = getVisibleTaskSubtasks(task.id).filter(function(st) { return isMilestone(st); });
       var completedSt = taskSubtasks.filter(function(st) { return st.Completed; }).length;
       var stColor = statusColors[task.Status] || '#94a3b8';
       var dueThisDay = task.Due_Date && task.Due_Date >= dayStartTs && task.Due_Date <= dayEndTs;
