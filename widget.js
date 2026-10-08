@@ -6725,7 +6725,7 @@ function openEditTaskModal(taskId, preserveAssignees) {
       // Dépendance entre sous-tâches (bloquée par une autre sous-tâche de la tâche)
       var stOtherSubtasks = taskSubtasks.filter(function(s2) { return s2.id !== st.id; });
       if (stOtherSubtasks.length > 0) {
-        html += '<div>';
+        html += '<div class="st-span2">';
         html += '<div class="st-pill-label">🔗 ' + t('blockedBy') + '</div>';
         html += '<select id="st-dep-' + st.id + '" class="st-dep-select" onchange="setSubtaskDependency(' + st.id + ', ' + task.id + ', this.value)">';
         html += '<option value="">-- ' + t('noDependencies') + ' --</option>';
@@ -7571,7 +7571,7 @@ function startEditSubtask(subtaskId) {
   var editEl = document.getElementById('st-edit-' + subtaskId);
   if (viewEl) viewEl.style.display = 'none';
   if (viewDodEl) viewDodEl.style.display = 'none';
-  if (editEl) { editEl.style.display = 'flex'; var t = document.getElementById('st-title-' + subtaskId); if (t) t.focus(); }
+  if (editEl) { editEl.style.display = 'grid'; var t = document.getElementById('st-title-' + subtaskId); if (t) t.focus(); }
 }
 
 function cancelEditSubtask(subtaskId) {
