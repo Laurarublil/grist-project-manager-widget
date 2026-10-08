@@ -3466,17 +3466,6 @@ function renderCalendarDay(dayNum, date, dayTasks, isOtherMonth, isToday, isWeek
     html += '<div class="day-more">+' + (dayTasks.length - maxTasks) + ' ' + (currentLang === 'fr' ? 'autres' : 'more') + '</div>';
   }
 
-  // Jalons du jour (vues mois et semaine) : puces violettes cliquables
-  var dayMilestones = getMilestonesForDate(date);
-  var maxMilestones = isWeekView ? 10 : 2;
-  for (var msi = 0; msi < Math.min(dayMilestones.length, maxMilestones); msi++) {
-    var ms = dayMilestones[msi];
-    html += '<div class="day-task day-milestone' + (ms.st.Completed ? ' milestone-done' : '') + '" onclick="event.stopPropagation(); openEditTaskModal(' + ms.taskId + ')" title="' + sanitize(ms.st.Title) + '">◆ ' + sanitize(ms.st.Title) + '</div>';
-  }
-  if (dayMilestones.length > maxMilestones) {
-    html += '<div class="day-more">◆ +' + (dayMilestones.length - maxMilestones) + '</div>';
-  }
-
   html += '</div></div>';
   return html;
 }
@@ -3599,26 +3588,6 @@ function getTasksForDate(date) {
   });
 }
 
-// Jalons du calendrier : sous-tâches de type jalon dont l'échéance tombe ce jour-là
-// (les jalons d'une tâche parente filtrée n'apparaissent pas)
-function getMilestonesForDate(date) {
-  var dateStart = new Date(date);
-  dateStart.setHours(0, 0, 0, 0);
-  var dateEnd = new Date(date);
-  dateEnd.setHours(23, 59, 59, 999);
-  var dateTs = dateStart.getTime() / 1000;
-  var dateEndTs = dateEnd.getTime() / 1000;
-  var result = [];
-  getFilteredTasks().forEach(function(task) {
-    getVisibleTaskSubtasks(task.id).forEach(function(st) {
-      if (isMilestone(st) && st.Due_Date && st.Due_Date >= dateTs && st.Due_Date <= dateEndTs) {
-        result.push({ st: st, taskId: task.id });
-      }
-    });
-  });
-  return result;
-}
-
 function renderCalendarWeekView() {
   // Calculate week start (Monday) based on offset
   var now = new Date();
@@ -3735,12 +3704,7 @@ function renderCalendarMobileView() {
       var task = dayTasks[i];
       html += '<div class="day-task status-' + task.Status + '" onclick="event.stopPropagation(); openEditTaskModal(' + task.id + ')" title="' + sanitize(task.Title) + '">' + sanitize(task.Title) + '</div>';
     }
-    var dayMilestones = getMilestonesForDate(dayDate);
-    for (var msi = 0; msi < dayMilestones.length; msi++) {
-      var ms = dayMilestones[msi];
-      html += '<div class="day-task day-milestone' + (ms.st.Completed ? ' milestone-done' : '') + '" onclick="event.stopPropagation(); openEditTaskModal(' + ms.taskId + ')" title="' + sanitize(ms.st.Title) + '">◆ ' + sanitize(ms.st.Title) + '</div>';
-    }
-    if (dayTasks.length === 0 && dayMilestones.length === 0) {
+    if (dayTasks.length === 0) {
       html += '<span class="mobile-no-task">\u2014</span>';
     }
     html += '</div></div>';
