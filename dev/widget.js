@@ -6720,7 +6720,8 @@ function openEditTaskModal(taskId, preserveAssignees) {
       if (dodList.length > 0) {
         html += '<div class="subtask-dod-list' + (dodDone === dodList.length ? ' dod-all-done' : '') + '">';
         dodList.forEach(function(d, di) {
-          html += '<div class="dod-item">';
+          html += '<div class="dod-item" id="st-dod-item-' + st.id + '-' + di + '" ondragstart="dodDragStart(event, ' + st.id + ', ' + di + ')" ondragover="dodDragOver(event)" ondrop="dodDrop(event, ' + st.id + ', ' + di + ')" ondragend="dodDragEnd(event)">';
+          html += '<span class="dod-drag-handle" onmousedown="dodHandleMouseDown(this.parentNode)" onmouseup="dodHandleMouseUp(this.parentNode)" title="' + (currentLang === 'fr' ? 'Réordonner' : 'Reorder') + '">⋮⋮</span>';
           html += '<input type="checkbox" class="dod-checkbox"' + (d.done ? ' checked' : '') + ' onchange="toggleDoD(' + st.id + ', ' + di + ', this.checked)" />';
           html += '<input type="text" class="dod-text" value="' + sanitize(d.text || '') + '" onchange="renameDoD(' + st.id + ', ' + di + ', this)" />';
           // Responsable par critère : liste déroulante compacte à choix unique
@@ -6764,144 +6765,6 @@ function openEditTaskModal(taskId, preserveAssignees) {
   html += '<div class="subtask-add-row">';
   html += '<input type="text" id="new-subtask-input" class="subtask-input" placeholder="' + t('subtaskPlaceholder') + '" onkeypress="if(event.key===\'Enter\')addSubtask(' + task.id + ')" />';
   html += '<button class="subtask-add-btn" onclick="addSubtask(' + task.id + ')">+</button>';
-  html += '</div>';
-  html += '</div>';
-
-  // === DEPENDENCIES SECTION ===
-  var taskDeps = getTaskDependencies(task.id);
-  var taskBlocks = getTasksDependingOn(task.id);
-  html += '<div class="dependencies-section">';
-  html += '<div class="dependencies-header">';
-  html += '<span class="detail-field-icon">🔗</span>';
-  html += '<span class="detail-field-label">' + t('dependencies') + '</span>';
-  html += '</div>';
-  
-  // Blocked by
-  html += '<div class="dep-subsection">';
-  html += '<div class="dep-label">' + t('blockedBy') + ':</div>';
-  if (taskDeps.length === 0) {
-    html += '<div class="dep-empty">' + t('noDependencies') + '</div>';
-  } else {
-    html += '<div class="dep-list">';
-    for (var di = 0; di < taskDeps.length; di++) {
-      var dep = taskDeps[di];
-      var depDone = dep.Status === 'done';
-      html += '<div class="dep-item' + (depDone ? ' dep-done' : '') + '">';
-      html += '<span class="dep-status">' + (depDone ? '✅' : '⏳') + '</span>';
-      html += '<span class="dep-title">' + sanitize(dep.Title) + '</span>';
-      html += '<button class="dep-remove" onclick="removeDependency(' + task.id + ', ' + dep.id + ')">✕</button>';
-      html += '</div>';
-    }
-    html += '</div>';
-  }
-  html += '</div>';
-  
-  // Blocks (tasks depending on this one)
-  if (taskBlocks.length > 0) {
-    html += '<div class="dep-subsection">';
-    html += '<div class="dep-label">' + t('blocks') + ':</div>';
-    html += '<div class="dep-list">';
-    for (var bi = 0; bi < taskBlocks.length; bi++) {
-      var blk = taskBlocks[bi];
-      html += '<div class="dep-item dep-blocks">';
-      html += '<span class="dep-title">' + sanitize(blk.Title) + '</span>';
-      html += '</div>';
-    }
-    html += '</div>';
-    html += '</div>';
-  }
-  
-  // Add dependency
-  html += '<div class="dep-add-row">';
-  html += '<select id="dep-select" onchange="if (this.value) addDependency(' + task.id + ')">';
-  html += '<option value="">-- ' + t('selectTask') + ' --</option>';
-  var availableTasks = getFilteredTasks().filter(function(t) {
-    return t.id !== task.id && !taskDeps.some(function(d) { return d.id === t.id; });
-  });
-  for (var ti = 0; ti < availableTasks.length; ti++) {
-    html += '<option value="' + availableTasks[ti].id + '">' + sanitize(availableTasks[ti].Title) + '</option>';
-  }
-  html += '</select>';
-  html += '<button class="dep-add-btn" onclick="addDependency(' + task.id + ')">+</button>';
-  html += '</div>';
-  html += '</div>';
-
-  // === CUSTOM FIELDS SECTION ===
-  if (customFields.length > 0) {
-    html += '<div class="custom-fields-section">';
-    html += '<div class="custom-fields-header">';
-    html += '<span class="detail-field-icon">📋</span>';
-    html += '<span class="detail-field-label">' + t('customFields') + '</span>';
-    if (isOwner) html += '<button class="cf-manage-btn" onclick="openCustomFieldsModal()">⚙️</button>';
-    html += '</div>';
-    html += '<div class="custom-fields-list">';
-    for (var cfi = 0; cfi < customFields.length; cfi++) {
-      var cf = customFields[cfi];
-      var cfValue = getTaskCustomFieldValue(task.id, cf.id);
-      html += '<div class="custom-field-item">';
-      html += '<label class="cf-label">' + sanitize(cf.Name) + '</label>';
-      html += renderCustomFieldInput(cf, task.id, cfValue);
-      html += '</div>';
-    }
-    html += '</div>';
-    html += '</div>';
-  } else if (isOwner) {
-    html += '<div class="custom-fields-section">';
-    html += '<div class="custom-fields-header">';
-    html += '<span class="detail-field-icon">📋</span>';
-    html += '<span class="detail-field-label">' + t('customFields') + '</span>';
-    html += '<button class="cf-manage-btn" onclick="openCustomFieldsModal()">⚙️</button>';
-    html += '</div>';
-    html += '<div class="cf-empty">' + t('noCustomFields') + '</div>';
-    html += '</div>';
-  }
-
-  // === ATTACHMENTS SECTION (D2) ===
-  html += '<div class="attachments-section">';
-  html += '<div class="comments-header">';
-  html += '<span class="detail-field-icon">📎</span>';
-  html += '<span class="detail-field-label">' + (currentLang === 'fr' ? 'Pièces jointes' : 'Attachments') + '</span>';
-  html += '<span class="comment-badge">' + getTaskAttachments(task.id).length + '</span>';
-  html += '</div>';
-  html += '<div class="attachments-list" id="attachments-list-' + task.id + '"></div>';
-  html += '<div class="attach-add-row">';
-  html += '<label class="attach-upload-btn">📎 ' + (currentLang === 'fr' ? 'Ajouter un fichier' : 'Add file') + '<input type="file" multiple style="display:none;" onchange="uploadTaskAttachments(' + task.id + ', Array.from(this.files)); this.value=\'\';"></label>';
-  html += '<span class="attach-status" id="attach-status-' + task.id + '"></span>';
-  html += '</div>';
-  html += '<div class="attach-hint">' + (currentLang === 'fr' ? 'Tous formats · max 5 Mo par fichier (images compressées automatiquement)' : 'All formats · max 5MB per file (images auto-compressed)') + '</div>';
-  html += '</div>';
-
-  // === COMMENTS SECTION ===
-  var taskComments = getTaskComments(task.id);
-  html += '<div class="comments-section">';
-  html += '<div class="comments-header">';
-  html += '<span class="detail-field-icon">💬</span>';
-  html += '<span class="detail-field-label">' + t('comments') + '</span>';
-  html += '<span class="comment-badge">' + taskComments.length + '</span>';
-  html += '</div>';
-  
-  html += '<div class="comments-list" id="comments-list">';
-  if (taskComments.length === 0) {
-    html += '<div class="comments-empty">' + t('noComments') + '</div>';
-  } else {
-    for (var ci = 0; ci < taskComments.length; ci++) {
-      var cmt = taskComments[ci];
-      html += '<div class="comment-item">';
-      html += '<div class="comment-header">';
-      html += '<span class="comment-author">👤 ' + sanitize(cmt.Author || 'Anonyme') + '</span>';
-      html += '<span class="comment-time">' + formatTimeAgo(cmt.Created_At) + '</span>';
-      if (isOwner) html += '<button class="comment-delete" onclick="deleteComment(' + cmt.id + ', ' + task.id + ')">✕</button>';
-      html += '</div>';
-      html += '<div class="comment-content">' + sanitize(cmt.Content) + '</div>';
-      html += '</div>';
-    }
-  }
-  html += '</div>';
-  
-  // Add comment input
-  html += '<div class="comment-add-row">';
-  html += '<textarea id="new-comment-input" class="comment-input" placeholder="' + t('commentPlaceholder') + '" rows="2"></textarea>';
-  html += '<button class="comment-add-btn" onclick="addComment(' + task.id + ')">' + t('addComment') + '</button>';
   html += '</div>';
   html += '</div>';
 
@@ -7023,6 +6886,144 @@ function openEditTaskModal(taskId, preserveAssignees) {
     html += '<button class="btn btn-secondary btn-sm" onclick="generateOccurrences(' + task.id + ', \'year\')">' + t('generateYear') + '</button>';
     html += '</div>';
   }
+  html += '</div>';
+
+  // === CUSTOM FIELDS SECTION ===
+  if (customFields.length > 0) {
+    html += '<div class="custom-fields-section">';
+    html += '<div class="custom-fields-header">';
+    html += '<span class="detail-field-icon">📋</span>';
+    html += '<span class="detail-field-label">' + t('customFields') + '</span>';
+    if (isOwner) html += '<button class="cf-manage-btn" onclick="openCustomFieldsModal()">⚙️</button>';
+    html += '</div>';
+    html += '<div class="custom-fields-list">';
+    for (var cfi = 0; cfi < customFields.length; cfi++) {
+      var cf = customFields[cfi];
+      var cfValue = getTaskCustomFieldValue(task.id, cf.id);
+      html += '<div class="custom-field-item">';
+      html += '<label class="cf-label">' + sanitize(cf.Name) + '</label>';
+      html += renderCustomFieldInput(cf, task.id, cfValue);
+      html += '</div>';
+    }
+    html += '</div>';
+    html += '</div>';
+  } else if (isOwner) {
+    html += '<div class="custom-fields-section">';
+    html += '<div class="custom-fields-header">';
+    html += '<span class="detail-field-icon">📋</span>';
+    html += '<span class="detail-field-label">' + t('customFields') + '</span>';
+    html += '<button class="cf-manage-btn" onclick="openCustomFieldsModal()">⚙️</button>';
+    html += '</div>';
+    html += '<div class="cf-empty">' + t('noCustomFields') + '</div>';
+    html += '</div>';
+  }
+
+  // === ATTACHMENTS SECTION (D2) ===
+  html += '<div class="attachments-section">';
+  html += '<div class="comments-header">';
+  html += '<span class="detail-field-icon">📎</span>';
+  html += '<span class="detail-field-label">' + (currentLang === 'fr' ? 'Pièces jointes' : 'Attachments') + '</span>';
+  html += '<span class="comment-badge">' + getTaskAttachments(task.id).length + '</span>';
+  html += '</div>';
+  html += '<div class="attachments-list" id="attachments-list-' + task.id + '"></div>';
+  html += '<div class="attach-add-row">';
+  html += '<label class="attach-upload-btn">📎 ' + (currentLang === 'fr' ? 'Ajouter un fichier' : 'Add file') + '<input type="file" multiple style="display:none;" onchange="uploadTaskAttachments(' + task.id + ', Array.from(this.files)); this.value=\'\';"></label>';
+  html += '<span class="attach-status" id="attach-status-' + task.id + '"></span>';
+  html += '</div>';
+  html += '<div class="attach-hint">' + (currentLang === 'fr' ? 'Tous formats · max 5 Mo par fichier (images compressées automatiquement)' : 'All formats · max 5MB per file (images auto-compressed)') + '</div>';
+  html += '</div>';
+
+  // === COMMENTS SECTION ===
+  var taskComments = getTaskComments(task.id);
+  html += '<div class="comments-section">';
+  html += '<div class="comments-header">';
+  html += '<span class="detail-field-icon">💬</span>';
+  html += '<span class="detail-field-label">' + t('comments') + '</span>';
+  html += '<span class="comment-badge">' + taskComments.length + '</span>';
+  html += '</div>';
+  
+  html += '<div class="comments-list" id="comments-list">';
+  if (taskComments.length === 0) {
+    html += '<div class="comments-empty">' + t('noComments') + '</div>';
+  } else {
+    for (var ci = 0; ci < taskComments.length; ci++) {
+      var cmt = taskComments[ci];
+      html += '<div class="comment-item">';
+      html += '<div class="comment-header">';
+      html += '<span class="comment-author">👤 ' + sanitize(cmt.Author || 'Anonyme') + '</span>';
+      html += '<span class="comment-time">' + formatTimeAgo(cmt.Created_At) + '</span>';
+      if (isOwner) html += '<button class="comment-delete" onclick="deleteComment(' + cmt.id + ', ' + task.id + ')">✕</button>';
+      html += '</div>';
+      html += '<div class="comment-content">' + sanitize(cmt.Content) + '</div>';
+      html += '</div>';
+    }
+  }
+  html += '</div>';
+  
+  // Add comment input
+  html += '<div class="comment-add-row">';
+  html += '<textarea id="new-comment-input" class="comment-input" placeholder="' + t('commentPlaceholder') + '" rows="2"></textarea>';
+  html += '<button class="comment-add-btn" onclick="addComment(' + task.id + ')">' + t('addComment') + '</button>';
+  html += '</div>';
+  html += '</div>';
+
+  // === DEPENDENCIES SECTION ===
+  var taskDeps = getTaskDependencies(task.id);
+  var taskBlocks = getTasksDependingOn(task.id);
+  html += '<div class="dependencies-section">';
+  html += '<div class="dependencies-header">';
+  html += '<span class="detail-field-icon">🔗</span>';
+  html += '<span class="detail-field-label">' + t('dependencies') + '</span>';
+  html += '</div>';
+  
+  // Blocked by
+  html += '<div class="dep-subsection">';
+  html += '<div class="dep-label">' + t('blockedBy') + ':</div>';
+  if (taskDeps.length === 0) {
+    html += '<div class="dep-empty">' + t('noDependencies') + '</div>';
+  } else {
+    html += '<div class="dep-list">';
+    for (var di = 0; di < taskDeps.length; di++) {
+      var dep = taskDeps[di];
+      var depDone = dep.Status === 'done';
+      html += '<div class="dep-item' + (depDone ? ' dep-done' : '') + '">';
+      html += '<span class="dep-status">' + (depDone ? '✅' : '⏳') + '</span>';
+      html += '<span class="dep-title">' + sanitize(dep.Title) + '</span>';
+      html += '<button class="dep-remove" onclick="removeDependency(' + task.id + ', ' + dep.id + ')">✕</button>';
+      html += '</div>';
+    }
+    html += '</div>';
+  }
+  html += '</div>';
+  
+  // Blocks (tasks depending on this one)
+  if (taskBlocks.length > 0) {
+    html += '<div class="dep-subsection">';
+    html += '<div class="dep-label">' + t('blocks') + ':</div>';
+    html += '<div class="dep-list">';
+    for (var bi = 0; bi < taskBlocks.length; bi++) {
+      var blk = taskBlocks[bi];
+      html += '<div class="dep-item dep-blocks">';
+      html += '<span class="dep-title">' + sanitize(blk.Title) + '</span>';
+      html += '</div>';
+    }
+    html += '</div>';
+    html += '</div>';
+  }
+  
+  // Add dependency
+  html += '<div class="dep-add-row">';
+  html += '<select id="dep-select" onchange="if (this.value) addDependency(' + task.id + ')">';
+  html += '<option value="">-- ' + t('selectTask') + ' --</option>';
+  var availableTasks = getFilteredTasks().filter(function(t) {
+    return t.id !== task.id && !taskDeps.some(function(d) { return d.id === t.id; });
+  });
+  for (var ti = 0; ti < availableTasks.length; ti++) {
+    html += '<option value="' + availableTasks[ti].id + '">' + sanitize(availableTasks[ti].Title) + '</option>';
+  }
+  html += '</select>';
+  html += '<button class="dep-add-btn" onclick="addDependency(' + task.id + ')">+</button>';
+  html += '</div>';
   html += '</div>';
 
   html += '</div>'; // end right
@@ -7509,6 +7510,63 @@ async function assignDoD(subtaskId, index, select) {
   dodList[index].assignee = (select.value || '').trim();
   await applyDoDUpdate(subtask, dodList, true);
   showToast(t('dodCriterionUpdated'), 'info');
+}
+
+// Réordonner les critères du DoD : glisser-déposer depuis la poignée ⋮⋮
+// (le drag n'est actif que depuis la poignée, pour ne pas gêner la saisie de texte)
+var dodDragData = null;
+function dodHandleMouseDown(row) {
+  if (row) row.setAttribute('draggable', 'true');
+}
+function dodHandleMouseUp(row) {
+  if (row) row.removeAttribute('draggable');
+}
+function dodDragStart(ev, subtaskId, index) {
+  dodDragData = { subtaskId: subtaskId, index: index };
+  if (ev.dataTransfer) {
+    ev.dataTransfer.effectAllowed = 'move';
+    try { ev.dataTransfer.setData('text/plain', String(index)); } catch (e) {}
+  }
+  var row = ev.target && ev.target.closest ? ev.target.closest('.dod-item') : null;
+  if (row) row.classList.add('dod-dragging');
+}
+function dodDragOver(ev) {
+  ev.preventDefault();
+  if (ev.dataTransfer) ev.dataTransfer.dropEffect = 'move';
+  var row = ev.target && ev.target.closest ? ev.target.closest('.dod-item') : null;
+  if (row) {
+    document.querySelectorAll('.dod-item.dod-drop-target').forEach(function(r) {
+      if (r !== row) r.classList.remove('dod-drop-target');
+    });
+    row.classList.add('dod-drop-target');
+  }
+}
+function dodDrop(ev, subtaskId, dropIndex) {
+  ev.preventDefault();
+  var drag = dodDragData;
+  dodDragData = null;
+  if (!drag || drag.subtaskId !== subtaskId || drag.index === dropIndex) return;
+  moveDoD(subtaskId, drag.index, dropIndex);
+}
+function dodDragEnd(ev) {
+  dodDragData = null;
+  var row = ev.target && ev.target.closest ? ev.target.closest('.dod-item') : null;
+  if (row) {
+    row.removeAttribute('draggable');
+    row.classList.remove('dod-dragging');
+  }
+  document.querySelectorAll('.dod-item.dod-drop-target').forEach(function(r) {
+    r.classList.remove('dod-drop-target');
+  });
+}
+async function moveDoD(subtaskId, fromIndex, toIndex) {
+  var subtask = subtasks.find(function(st) { return st.id === subtaskId; });
+  if (!subtask) return;
+  var dodList = copyDoD(subtask);
+  if (fromIndex < 0 || fromIndex >= dodList.length) return;
+  var moved = dodList.splice(fromIndex, 1)[0];
+  dodList.splice(toIndex, 0, moved);
+  await applyDoDUpdate(subtask, dodList, true);
 }
 
 async function deleteDoD(subtaskId, index) {
