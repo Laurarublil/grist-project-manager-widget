@@ -1930,6 +1930,7 @@ async function ensureTables() {
           { id: 'Status', type: 'Choice', widgetOptions: JSON.stringify({ choices: ['todo', 'progress', 'done', 'archived'] }) },
           { id: 'Priority', type: 'Choice', widgetOptions: JSON.stringify({ choices: ['high', 'medium', 'low'] }) },
           { id: 'Assignee', type: 'Text' },
+          { id: 'Tag', type: 'Text' },
           { id: 'Due_Date', type: 'Date' },
           { id: 'Estimated_Hours', type: 'Numeric' },
           { id: 'Completed', type: 'Bool' },
@@ -2253,6 +2254,9 @@ async function ensureTables() {
         if (stCols.indexOf('Assignee') === -1) {
           stActions.push(['AddColumn', SUBTASKS_TABLE, 'Assignee', { type: 'Text' }]);
         }
+        if (stCols.indexOf('Tag') === -1) {
+          stActions.push(['AddColumn', SUBTASKS_TABLE, 'Tag', { type: 'Text' }]);
+        }
         if (stCols.indexOf('Due_Date') === -1) {
           stActions.push(['AddColumn', SUBTASKS_TABLE, 'Due_Date', { type: 'Date' }]);
         }
@@ -2468,6 +2472,7 @@ async function loadAllData() {
           Order: subtaskData.Order ? subtaskData.Order[i] : 0,
           Blocked_By_Subtask_Id: subtaskData.Blocked_By_Subtask_Id ? subtaskData.Blocked_By_Subtask_Id[i] : null,
           Assignee: subtaskData.Assignee ? subtaskData.Assignee[i] : '',
+          Tag: subtaskData.Tag ? subtaskData.Tag[i] : '',
           Due_Date: subtaskData.Due_Date ? subtaskData.Due_Date[i] : null,
           Start_Date: subtaskData.Start_Date ? subtaskData.Start_Date[i] : null,
           Estimated_Hours: subtaskData.Estimated_Hours ? subtaskData.Estimated_Hours[i] : null,
@@ -4408,6 +4413,7 @@ function renderTableView() {
   html += '<th style="' + thStyle + '" onclick="sortTable(\'Project\')">' + (currentLang === 'fr' ? 'Projet' : 'Project') + sortIcon('Project') + '</th>';
   html += '<th style="' + thStyle + '" onclick="sortTable(\'Status\')">' + t('colStatus') + sortIcon('Status') + '</th>';
   html += '<th style="' + thStyle + '" onclick="sortTable(\'Priority\')">' + t('colPriority') + sortIcon('Priority') + '</th>';
+  html += '<th>' + t('tag') + '</th>';
   html += '<th style="' + thStyle + '" onclick="sortTable(\'Assignee\')">' + t('colAssignee') + sortIcon('Assignee') + '</th>';
   html += '<th style="' + thStyle + '" onclick="sortTable(\'Start_Date\')">' + t('colStartDate') + sortIcon('Start_Date') + '</th>';
   html += '<th style="' + thStyle + '" onclick="sortTable(\'Due_Date\')">' + t('colDueDate') + sortIcon('Due_Date') + '</th>';
@@ -4440,6 +4446,12 @@ function renderTableView() {
     if (taskSubtasks.length > 0) html += ' <span class="st-badge">' + completedSt + '/' + taskSubtasks.length + '</span>';
     html += '</td>';
     html += '<td><span class="priority-dot ' + dotClass + '"></span> ' + priorityLabel(task.Priority) + '</td>';
+    var taskTagList = task.Tag ? task.Tag.split(',').map(function(tg) { return tg.trim(); }).filter(Boolean) : [];
+    html += '<td style="white-space:nowrap;">' + taskTagList.map(function(tg) {
+      var tgObj = tags.find(function(x) { return x.Name === tg; });
+      var tgColor = tgObj ? tgObj.Color : '#94a3b8';
+      return '<span style="font-size:10px;padding:1px 6px;border:1px solid ' + tgColor + '40;border-radius:4px;color:' + tgColor + ';font-weight:600;">' + sanitize(tg) + '</span>';
+    }).join(' ') + '</td>';
     var assigneeDisplay = task.Assignee ? task.Assignee.split(',').map(function(a) { return getUserDisplayName(a.trim()); }).join(', ') : '';
     html += '<td>' + (assigneeDisplay ? '<span class="assignee-chip">👤 ' + sanitize(assigneeDisplay) + '</span>' : '') + '</td>';
     html += '<td>' + (task.Start_Date ? formatDate(task.Start_Date) : t('notDefined')) + '</td>';
@@ -4469,6 +4481,12 @@ function renderTableView() {
       html += '<td><span class="status-badge" style="background:' + stStatusColor + '20;color:' + stStatusColor + ';">● ' + statusLabel(stStatus) + '</span></td>';
       // Priorité
       html += '<td><span class="priority-dot ' + stDotClass + '"></span> ' + priorityLabel(st.Priority) + '</td>';
+      var stTagList = st.Tag ? st.Tag.split(',').map(function(tg) { return tg.trim(); }).filter(Boolean) : [];
+      html += '<td style="white-space:nowrap;">' + stTagList.map(function(tg) {
+        var tgObj = tags.find(function(x) { return x.Name === tg; });
+        var tgColor = tgObj ? tgObj.Color : '#94a3b8';
+        return '<span style="font-size:10px;padding:1px 6px;border:1px solid ' + tgColor + '40;border-radius:4px;color:' + tgColor + ';font-weight:600;">' + sanitize(tg) + '</span>';
+      }).join(' ') + '</td>';
       // Assigné à
       html += '<td>' + (stAssignee ? '<span class="assignee-chip">👤 ' + sanitize(stAssignee) + '</span>' : '') + '</td>';
       // Date de début
@@ -4482,7 +4500,7 @@ function renderTableView() {
   }
 
   if (filtered.length === 0) {
-    html += '<tr><td colspan="8" style="text-align:center;padding:30px;color:#94a3b8;">' + t('noTasks') + '</td></tr>';
+    html += '<tr><td colspan="9" style="text-align:center;padding:30px;color:#94a3b8;">' + t('noTasks') + '</td></tr>';
   }
 
   html += '</tbody></table>';
@@ -6608,11 +6626,12 @@ function openEditTaskModal(taskId, preserveAssignees) {
       if (stBlocked && stBlocker) {
         html += '<span class="subtask-blocked-badge" title="' + t('blockedBy') + ' ' + sanitize(stBlocker.Title) + '">🔒</span>';
       }
-      // Meta : status + priority + assignee + due date
+      // Meta : tag + priority + assignee + due date
       html += '<span class="subtask-meta">';
-      if (st.Status && st.Status !== 'todo') {
-        var stStatusColor = st.Status === 'done' ? '#22c55e' : '#f59e0b';
-        html += '<span class="subtask-assignee-badge" style="background:' + stStatusColor + '20;color:' + stStatusColor + ';">' + (st.Status === 'done' ? '✅' : '🔄') + '</span>';
+      if (st.Tag) {
+        var stTagObj = tags.find(function(tg) { return tg.Name === st.Tag; });
+        var stTagColor = stTagObj ? stTagObj.Color : '#94a3b8';
+        html += '<span class="subtask-assignee-badge" style="border:1px solid ' + stTagColor + '40;color:' + stTagColor + ';">🏷️ ' + sanitize(st.Tag) + '</span>';
       }
       if (st.Priority && st.Priority !== 'medium') {
         var stPrioColor = st.Priority === 'high' ? '#ef4444' : '#94a3b8';
@@ -6654,9 +6673,7 @@ function openEditTaskModal(taskId, preserveAssignees) {
       }
       assigneeListHtml += '</select>';
       var stDueDateInput = st.Due_Date ? new Date(st.Due_Date * 1000).toISOString().split('T')[0] : '';
-      var stStatus = st.Status || 'todo';
       var stPriority = st.Priority || 'medium';
-      var stLbl = { todo: t('statusTodo'), progress: t('statusProgress'), done: t('statusDone') };
       var prLbl = { high: t('priorityHigh'), medium: t('priorityMedium'), low: t('priorityLow') };
       html += '<div class="subtask-edit-form" id="st-edit-' + st.id + '">';
       // Title
@@ -6672,17 +6689,15 @@ function openEditTaskModal(taskId, preserveAssignees) {
       html += '</div>';
       html += '<input type="hidden" id="st-type-' + st.id + '" value="' + stType + '">';
       html += '</div>';
-      // Status pills — statuts personnalisés (getKanbanStatuses), avec couleur réelle
+      // Tag : liste déroulante à choix unique (comme pour les tâches)
       html += '<div>';
-      html += '<div class="st-pill-label">' + (currentLang === 'fr' ? 'Statut' : 'Status') + '</div>';
-      html += '<div class="st-pill-group" id="st-status-group-' + st.id + '">';
-      getKanbanStatuses().forEach(function(s) {
-        var sLbl = (s.emoji ? s.emoji + ' ' : '') + (currentLang === 'fr' ? s.label_fr : s.label_en);
-        var sActiveStyle = (stStatus === s.key) ? ('background:' + (s.color || '#3b82f6') + ';color:#fff;border-color:' + (s.color || '#3b82f6') + ';') : '';
-        html += '<button type="button" class="st-pill" style="' + sActiveStyle + '" data-key="' + s.key + '" onclick="setStStatus(' + st.id + ',\'' + s.key + '\',this)">' + sanitize(sLbl) + '</button>';
-      });
-      html += '</div>';
-      html += '<input type="hidden" id="st-status-' + st.id + '" value="' + stStatus + '">';
+      html += '<div class="st-pill-label">🏷️ ' + t('tag') + '</div>';
+      html += '<select id="st-tag-' + st.id + '" class="st-dep-select" style="width:100%;">';
+      html += '<option value="">--</option>';
+      for (var stTi = 0; stTi < tags.length; stTi++) {
+        html += '<option value="' + sanitize(tags[stTi].Name) + '"' + (tags[stTi].Name === st.Tag ? ' selected' : '') + '>' + sanitize(tags[stTi].Name) + '</option>';
+      }
+      html += '</select>';
       html += '</div>';
       // Priority pills
       html += '<div>';
@@ -7509,20 +7524,7 @@ async function deleteDoD(subtaskId, index) {
   showToast(t('dodCriterionDeleted'), 'info');
 }
 
-// Toggle pill selection for status/priority
-// Sélecteur de statut de sous-tâche (statuts personnalisés avec couleur réelle)
-function setStStatus(subtaskId, value, btn) {
-  var hidden = document.getElementById('st-status-' + subtaskId);
-  if (hidden) hidden.value = value;
-  var grp = btn.parentNode;
-  if (grp) grp.querySelectorAll('.st-pill').forEach(function(p) {
-    p.className = 'st-pill'; p.style.background = ''; p.style.color = ''; p.style.borderColor = '';
-  });
-  var def = getKanbanStatuses().find(function(s) { return s.key === value; });
-  var color = (def && def.color) ? def.color : '#3b82f6';
-  btn.style.background = color; btn.style.color = '#fff'; btn.style.borderColor = color;
-}
-
+// Toggle pill selection for type/priority
 // B2 : sélecteur de type de sous-tâche (sous-tâche / jalon)
 function setStType(subtaskId, value, btn) {
   var hidden = document.getElementById('st-type-' + subtaskId);
@@ -7567,7 +7569,7 @@ function cancelEditSubtask(subtaskId) {
 // après un re-render de la modale (ajout/modif/suppression d'un critère DoD).
 function snapshotSubtaskForm(subtaskId) {
   var snap = null;
-  ['st-title-','st-desc-','st-type-','st-status-','st-priority-','st-start-','st-due-','st-hours-','st-assignee-'].forEach(function(pfx) {
+  ['st-title-','st-desc-','st-type-','st-tag-','st-priority-','st-start-','st-due-','st-hours-','st-assignee-'].forEach(function(pfx) {
     var el = document.getElementById(pfx + subtaskId);
     if (el) {
       if (!snap) snap = {};
@@ -7582,13 +7584,13 @@ function snapshotSubtaskForm(subtaskId) {
 function restoreSubtaskForm(subtaskId, snap) {
   if (snap) startEditSubtask(subtaskId);   // formulaire fermé avant l'opération : ne pas l'ouvrir
   if (!snap) return;
-  ['st-title-','st-desc-','st-assignee-','st-start-','st-due-','st-hours-'].forEach(function(pfx) {
+  ['st-title-','st-desc-','st-tag-','st-assignee-','st-start-','st-due-','st-hours-'].forEach(function(pfx) {
     var el = document.getElementById(pfx + subtaskId);
     if (el && snap[pfx] !== undefined) el.value = snap[pfx];
   });
   // Pastilles type/statut/priorité : clique le bouton correspondant pour
   // resynchroniser le visuel et le champ caché sur la valeur figée.
-  [['st-type-group-', snap['st-type-']], ['st-status-group-', snap['st-status-']], ['st-priority-group-', snap['st-priority-']]].forEach(function(pair) {
+  [['st-type-group-', snap['st-type-']], ['st-priority-group-', snap['st-priority-']]].forEach(function(pair) {
     if (pair[1] === undefined) return;
     var grp = document.getElementById(pair[0] + subtaskId);
     var btn = grp ? grp.querySelector('[data-key="' + pair[1] + '"]') : null;
@@ -7601,7 +7603,7 @@ function restoreSubtaskForm(subtaskId, snap) {
 async function saveEditSubtask(subtaskId, parentTaskId) {
   var titleInput    = document.getElementById('st-title-'    + subtaskId);
   var descInput     = document.getElementById('st-desc-'     + subtaskId);
-  var statusSel     = document.getElementById('st-status-'   + subtaskId);
+  var tagSel       = document.getElementById('st-tag-'     + subtaskId);
   var prioritySel   = document.getElementById('st-priority-' + subtaskId);
   var assigneeSel   = document.getElementById('st-assignee-' + subtaskId);
   var startDateInput= document.getElementById('st-start-'    + subtaskId);
@@ -7613,10 +7615,10 @@ async function saveEditSubtask(subtaskId, parentTaskId) {
   var newAssignee = assigneeSel ? assigneeSel.value : '';
   var newStartDate = startDateInput && startDateInput.value ? Math.floor(new Date(startDateInput.value).getTime() / 1000) : null;
   var newDueDate = dueDateInput && dueDateInput.value ? Math.floor(new Date(dueDateInput.value).getTime() / 1000) : null;
-  var newStatus = statusSel ? statusSel.value : 'todo';
   var typeEl = document.getElementById('st-type-' + subtaskId);
-  // Definition of Done : quand des critères existent, le statut en découle
+  // Statut : plus édité dans le formulaire ; conservé tel quel, découle du DoD quand il existe
   var _svSt = subtasks.find(function(sv) { return sv.id === subtaskId; });
+  var newStatus = (_svSt && _svSt.Status) || 'todo';
   if (_svSt && getDoD(_svSt).length > 0) {
     if (isDoDFulfilled(_svSt)) {
       newStatus = 'done';
@@ -7632,6 +7634,7 @@ async function saveEditSubtask(subtaskId, parentTaskId) {
     Completed: newStatus === 'done',
     Priority: prioritySel ? prioritySel.value : 'medium',
     Assignee: newAssignee,
+    Tag: tagSel ? tagSel.value : '',
     Estimated_Hours: hoursInput && hoursInput.value ? parseFloat(hoursInput.value) : null,
     Type: typeEl ? typeEl.value : 'subtask'
   };
