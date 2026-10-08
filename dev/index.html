@@ -2287,21 +2287,21 @@
     .subtask-dod-list.dod-all-done { border-left-color: #22c55e; }
     .dod-item {
       display: flex; align-items: center; gap: 6px;
-      padding: 3px 6px; background: #f8fafc; border-radius: 6px; font-size: 12px;
+      padding: 4px 7px; background: #f8fafc; border-radius: 6px; font-size: 13px;
     }
     .dod-item:hover { background: #f1f5f9; }
     .dod-checkbox { width: 14px; height: 14px; accent-color: #22c55e; cursor: pointer; flex-shrink: 0; margin: 0; }
     .dod-text {
       flex: 1; border: none; background: transparent; color: #475569;
-      font-size: 12px; padding: 2px 4px; outline: none; min-width: 0;
+      font-size: 13px; padding: 3px 5px; outline: none; min-width: 0;
     }
     .dod-text:focus { background: #fff; border-radius: 4px; box-shadow: 0 0 0 1px #3b82f6; }
     .dod-text-view { flex: 1; color: #475569; font-size: 12px; padding: 2px 4px; min-width: 0; }
     .dod-text-view.dod-text-done { text-decoration: line-through; color: #94a3b8; }
     .dod-assignee {
-      flex-shrink: 0; width: 110px; padding: 2px 4px;
+      flex-shrink: 0; width: 130px; padding: 3px 6px;
       border: 1px solid #e2e8f0; border-radius: 4px;
-      font-size: 11px; color: #475569; background: #fff;
+      font-size: 12px; color: #475569; background: #fff;
     }
     .dod-delete {
       width: 18px; height: 18px; border: none; background: transparent;
@@ -2319,8 +2319,8 @@
     .st-dod-add-row { display: flex; gap: 6px; align-items: center; margin-top: 6px; }
     .st-dod-add-row .dod-add-btn { flex-shrink: 0; padding: 3px 8px; }
     .st-dod-add-input {
-      flex: 1; min-width: 0; padding: 4px 8px;
-      border: 1px solid #e2e8f0; border-radius: 6px; font-size: 12px;
+      flex: 1; min-width: 0; padding: 6px 10px;
+      border: 1px solid #e2e8f0; border-radius: 6px; font-size: 13px;
     }
     .st-dod-add-input:focus { outline: none; border-color: #3b82f6; }
     body.dark-mode .dod-item { background: #1e293b; }
@@ -2535,22 +2535,32 @@
     /* Subtask edit form — modern card */
     .subtask-edit-form {
       display: none;
-      flex-direction: column;
-      gap: 10px;
-      padding: 12px;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px 14px;
+      padding: 14px;
       margin: 6px 0 2px;
       background: #f8fafc;
       border: 1px solid #e2e8f0;
       border-radius: 10px;
       animation: dropdownIn .12s ease;
     }
+    .subtask-edit-form > .subtask-edit-title,
+    .subtask-edit-form > .st-meta-row,
+    .subtask-edit-form > .subtask-dod,
+    .subtask-edit-form > .st-dod-add-row,
+    .subtask-edit-form > .subtask-attach,
+    .subtask-edit-form > .st-form-actions,
+    .subtask-edit-form > .st-span2 { grid-column: 1 / -1; }
+    @media (max-width: 900px) {
+      .subtask-edit-form { grid-template-columns: 1fr; }
+    }
     .subtask-edit-title {
       width: 100%;
       box-sizing: border-box;
-      padding: 7px 10px;
+      padding: 9px 12px;
       border: 1px solid #e2e8f0;
       border-radius: 7px;
-      font-size: 13px;
+      font-size: 14px;
       font-family: inherit;
       background: #fff;
       color: inherit;
@@ -2565,7 +2575,7 @@
       flex-wrap: wrap;
     }
     .st-pill-label {
-      font-size: 10px;
+      font-size: 11px;
       font-weight: 600;
       color: #94a3b8;
       text-transform: uppercase;
@@ -2573,11 +2583,11 @@
       margin-bottom: 4px;
     }
     .st-pill {
-      padding: 4px 10px;
+      padding: 5px 12px;
       border-radius: 20px;
       border: 1.5px solid #e2e8f0;
       background: transparent;
-      font-size: 11px;
+      font-size: 12px;
       font-weight: 600;
       cursor: pointer;
       font-family: inherit;
@@ -2601,10 +2611,10 @@
     .st-meta-row select,
     .subtask-edit-select,
     .subtask-edit-date {
-      padding: 5px 10px;
+      padding: 7px 10px;
       border: 1px solid #e2e8f0;
       border-radius: 7px;
-      font-size: 12px;
+      font-size: 13px;
       font-family: inherit;
       background: #fff;
       color: inherit;
@@ -2615,10 +2625,10 @@
     .subtask-edit-date:focus { border-color: #6366f1; }
     .st-dep-select {
       width: 100%;
-      padding: 5px 8px;
+      padding: 7px 10px;
       border: 1px solid #e2e8f0;
       border-radius: 6px;
-      font-size: 12px;
+      font-size: 13px;
       font-family: inherit;
       background: #fff;
       color: inherit;
@@ -2627,11 +2637,11 @@
     }
     .st-dep-select:focus { border-color: #6366f1; }
     .st-hours-input {
-      width: 72px;
-      padding: 5px 8px;
+      width: 90px;
+      padding: 7px 10px;
       border: 1px solid #e2e8f0;
       border-radius: 7px;
-      font-size: 12px;
+      font-size: 13px;
       font-family: inherit;
       background: #fff;
       color: inherit;
@@ -2641,12 +2651,12 @@
     /* Save/Cancel buttons */
     .st-form-actions { display: flex; gap: 6px; justify-content: flex-end; }
     .subtask-save-btn {
-      padding: 6px 14px;
+      padding: 8px 16px;
       background: #6366f1;
       color: #fff;
       border: none;
       border-radius: 7px;
-      font-size: 12px;
+      font-size: 13px;
       font-weight: 600;
       font-family: inherit;
       cursor: pointer;
@@ -2654,12 +2664,12 @@
     }
     .subtask-save-btn:hover { background: #4f46e5; }
     .subtask-cancel-btn {
-      padding: 6px 12px;
+      padding: 8px 14px;
       background: transparent;
       color: #94a3b8;
       border: 1px solid #e2e8f0;
       border-radius: 7px;
-      font-size: 12px;
+      font-size: 13px;
       font-family: inherit;
       cursor: pointer;
       transition: all .12s;
@@ -3384,7 +3394,7 @@
     .section-title p { font-size: 12px; color: #94a3b8; }
 
     /* ========== RICH DETAIL MODAL ========== */
-    .modal-detail { max-width: 900px; }
+    .modal-detail { max-width: 1150px; }
     .modal-detail .modal-body { padding: 0; }
     .modal-detail-top {
       padding: 14px 20px;
@@ -3398,13 +3408,13 @@
     }
     .modal-detail-content {
       display: grid;
-      grid-template-columns: 1fr 280px;
+      grid-template-columns: 1fr 320px;
       min-height: 360px;
     }
     .modal-detail-left { padding: 20px; border-right: 1px solid #f1f5f9; }
     .modal-detail-right { padding: 20px; background: #fafbfc; }
     .detail-title-input {
-      font-size: 20px; font-weight: 800; width: 100%;
+      font-size: 22px; font-weight: 800; width: 100%;
       padding: 10px 12px; margin-bottom: 14px; background: #fff;
       color: #1e293b; border: 1px solid #e2e8f0; border-radius: 10px;
       transition: border-color .15s, box-shadow .15s;
@@ -3417,13 +3427,13 @@
       margin-bottom: 14px;
     }
     .detail-field-icon { font-size: 14px; color: #94a3b8; min-width: 20px; margin-top: 6px; }
-    .detail-field-label { font-size: 11px; color: #94a3b8; font-weight: 600; min-width: 70px; margin-top: 6px; }
+    .detail-field-label { font-size: 12px; color: #94a3b8; font-weight: 600; min-width: 70px; margin-top: 7px; }
     .detail-field-value { flex: 1; }
     .detail-field-value input,
     .detail-field-value select,
     .detail-field-value textarea {
-      width: 100%; padding: 6px 10px; border: 1px solid #e2e8f0;
-      border-radius: 6px; font-size: 12px; font-family: inherit;
+      width: 100%; padding: 8px 12px; border: 1px solid #e2e8f0;
+      border-radius: 6px; font-size: 13px; font-family: inherit;
     }
     .detail-field-value input:focus,
     .detail-field-value select:focus,
