@@ -2281,6 +2281,15 @@
       border: 1px solid #e2e8f0; border-radius: 4px;
       font-size: 12px; color: #475569; background: #fff;
     }
+    .dod-drag-handle {
+      cursor: grab; flex-shrink: 0; user-select: none;
+      color: #cbd5e1; font-size: 13px; letter-spacing: -3px;
+      padding: 0 3px; line-height: 1;
+    }
+    .dod-drag-handle:active { cursor: grabbing; }
+    .dod-item.dod-dragging { opacity: 0.45; }
+    .dod-item.dod-drop-target { box-shadow: 0 -2px 0 0 #6366f1; }
+    body.dark-mode .dod-drag-handle { color: #475569; }
     .dod-delete {
       width: 18px; height: 18px; border: none; background: transparent;
       color: #cbd5e1; cursor: pointer; border-radius: 4px; font-size: 11px;

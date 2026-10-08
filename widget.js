@@ -6720,7 +6720,8 @@ function openEditTaskModal(taskId, preserveAssignees) {
       if (dodList.length > 0) {
         html += '<div class="subtask-dod-list' + (dodDone === dodList.length ? ' dod-all-done' : '') + '">';
         dodList.forEach(function(d, di) {
-          html += '<div class="dod-item">';
+          html += '<div class="dod-item" id="st-dod-item-' + st.id + '-' + di + '" ondragstart="dodDragStart(event, ' + st.id + ', ' + di + ')" ondragover="dodDragOver(event)" ondrop="dodDrop(event, ' + st.id + ', ' + di + ')" ondragend="dodDragEnd(event)">';
+          html += '<span class="dod-drag-handle" onmousedown="dodHandleMouseDown(this.parentNode)" onmouseup="dodHandleMouseUp(this.parentNode)" title="' + (currentLang === 'fr' ? 'Réordonner' : 'Reorder') + '">⋮⋮</span>';
           html += '<input type="checkbox" class="dod-checkbox"' + (d.done ? ' checked' : '') + ' onchange="toggleDoD(' + st.id + ', ' + di + ', this.checked)" />';
           html += '<input type="text" class="dod-text" value="' + sanitize(d.text || '') + '" onchange="renameDoD(' + st.id + ', ' + di + ', this)" />';
           // Responsable par critère : liste déroulante compacte à choix unique
@@ -7509,6 +7510,63 @@ async function assignDoD(subtaskId, index, select) {
   dodList[index].assignee = (select.value || '').trim();
   await applyDoDUpdate(subtask, dodList, true);
   showToast(t('dodCriterionUpdated'), 'info');
+}
+
+// Réordonner les critères du DoD : glisser-déposer depuis la poignée ⋮⋮
+// (le drag n'est actif que depuis la poignée, pour ne pas gêner la saisie de texte)
+var dodDragData = null;
+function dodHandleMouseDown(row) {
+  if (row) row.setAttribute('draggable', 'true');
+}
+function dodHandleMouseUp(row) {
+  if (row) row.removeAttribute('draggable');
+}
+function dodDragStart(ev, subtaskId, index) {
+  dodDragData = { subtaskId: subtaskId, index: index };
+  if (ev.dataTransfer) {
+    ev.dataTransfer.effectAllowed = 'move';
+    try { ev.dataTransfer.setData('text/plain', String(index)); } catch (e) {}
+  }
+  var row = ev.target && ev.target.closest ? ev.target.closest('.dod-item') : null;
+  if (row) row.classList.add('dod-dragging');
+}
+function dodDragOver(ev) {
+  ev.preventDefault();
+  if (ev.dataTransfer) ev.dataTransfer.dropEffect = 'move';
+  var row = ev.target && ev.target.closest ? ev.target.closest('.dod-item') : null;
+  if (row) {
+    document.querySelectorAll('.dod-item.dod-drop-target').forEach(function(r) {
+      if (r !== row) r.classList.remove('dod-drop-target');
+    });
+    row.classList.add('dod-drop-target');
+  }
+}
+function dodDrop(ev, subtaskId, dropIndex) {
+  ev.preventDefault();
+  var drag = dodDragData;
+  dodDragData = null;
+  if (!drag || drag.subtaskId !== subtaskId || drag.index === dropIndex) return;
+  moveDoD(subtaskId, drag.index, dropIndex);
+}
+function dodDragEnd(ev) {
+  dodDragData = null;
+  var row = ev.target && ev.target.closest ? ev.target.closest('.dod-item') : null;
+  if (row) {
+    row.removeAttribute('draggable');
+    row.classList.remove('dod-dragging');
+  }
+  document.querySelectorAll('.dod-item.dod-drop-target').forEach(function(r) {
+    r.classList.remove('dod-drop-target');
+  });
+}
+async function moveDoD(subtaskId, fromIndex, toIndex) {
+  var subtask = subtasks.find(function(st) { return st.id === subtaskId; });
+  if (!subtask) return;
+  var dodList = copyDoD(subtask);
+  if (fromIndex < 0 || fromIndex >= dodList.length) return;
+  var moved = dodList.splice(fromIndex, 1)[0];
+  dodList.splice(toIndex, 0, moved);
+  await applyDoDUpdate(subtask, dodList, true);
 }
 
 async function deleteDoD(subtaskId, index) {
