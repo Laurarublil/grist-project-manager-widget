@@ -6657,6 +6657,7 @@ function openEditTaskModal(taskId, preserveAssignees) {
           html += '<div class="dod-item">';
           html += '<input type="checkbox" class="dod-checkbox"' + (d.done ? ' checked' : '') + ' onchange="toggleDoD(' + st.id + ', ' + di + ', this.checked)" />';
           html += '<span class="dod-text-view' + (d.done ? ' dod-text-done' : '') + '">' + sanitize(d.text || '') + '</span>';
+          if (d.assignee) html += '<span class="subtask-assignee-badge">👤 ' + sanitize(d.assignee) + '</span>';
           html += '</div>';
         });
         html += '</div>';
@@ -6743,6 +6744,13 @@ function openEditTaskModal(taskId, preserveAssignees) {
           html += '<div class="dod-item">';
           html += '<input type="checkbox" class="dod-checkbox"' + (d.done ? ' checked' : '') + ' onchange="toggleDoD(' + st.id + ', ' + di + ', this.checked)" />';
           html += '<input type="text" class="dod-text" value="' + sanitize(d.text || '') + '" onchange="renameDoD(' + st.id + ', ' + di + ', this)" />';
+          // Responsable par critère : liste déroulante compacte à choix unique
+          html += '<select class="dod-assignee" onchange="assignDoD(' + st.id + ', ' + di + ', this)" title="' + t('subtaskAssignee') + '">';
+          html += '<option value="">👤 --</option>';
+          for (var du = 0; du < users.length; du++) {
+            html += '<option value="' + sanitize(users[du].Name) + '"' + (users[du].Name === (d.assignee || '') ? ' selected' : '') + '>' + sanitize(users[du].Name) + '</option>';
+          }
+          html += '</select>';
           html += '<button type="button" class="dod-delete" onclick="deleteDoD(' + st.id + ', ' + di + ')" title="' + t('delete') + '">✕</button>';
           html += '</div>';
         });
@@ -7420,7 +7428,7 @@ function isDoDFulfilled(subtask) {
 
 function copyDoD(subtask) {
   return getDoD(subtask).map(function(d) {
-    return { text: d.text || '', done: !!d.done };
+    return { text: d.text || '', done: !!d.done, assignee: d.assignee || '' };
   });
 }
 
@@ -7476,7 +7484,7 @@ async function addDoD(subtaskId, criterionText) {
   var dodList = copyDoD(subtask);
   // Nouveau critère créé décoché : si la sous-tâche était terminée, elle
   // repasse en cours (la complétion est dérivée du DoD).
-  dodList.push({ text: (criterionText && criterionText.trim()) ? criterionText.trim() : t('newCriterion'), done: false });
+  dodList.push({ text: (criterionText && criterionText.trim()) ? criterionText.trim() : t('newCriterion'), done: false, assignee: '' });
   await applyDoDUpdate(subtask, dodList, true);
   showToast(t('dodCriterionAdded'), 'info');
 }
@@ -7510,6 +7518,16 @@ async function renameDoD(subtaskId, index, input) {
     return;
   }
   dodList[index].text = newText;
+  await applyDoDUpdate(subtask, dodList, true);
+  showToast(t('dodCriterionUpdated'), 'info');
+}
+
+async function assignDoD(subtaskId, index, select) {
+  var subtask = subtasks.find(function(st) { return st.id === subtaskId; });
+  if (!subtask) return;
+  var dodList = copyDoD(subtask);
+  if (!dodList[index]) return;
+  dodList[index].assignee = (select.value || '').trim();
   await applyDoDUpdate(subtask, dodList, true);
   showToast(t('dodCriterionUpdated'), 'info');
 }

@@ -2298,6 +2298,11 @@
     .dod-text:focus { background: #fff; border-radius: 4px; box-shadow: 0 0 0 1px #3b82f6; }
     .dod-text-view { flex: 1; color: #475569; font-size: 12px; padding: 2px 4px; min-width: 0; }
     .dod-text-view.dod-text-done { text-decoration: line-through; color: #94a3b8; }
+    .dod-assignee {
+      flex-shrink: 0; width: 110px; padding: 2px 4px;
+      border: 1px solid #e2e8f0; border-radius: 4px;
+      font-size: 11px; color: #475569; background: #fff;
+    }
     .dod-delete {
       width: 18px; height: 18px; border: none; background: transparent;
       color: #cbd5e1; cursor: pointer; border-radius: 4px; font-size: 11px;
@@ -2324,6 +2329,7 @@
     body.dark-mode .dod-text:focus { background: #0f172a; }
     body.dark-mode .dod-text-view { color: #e2e8f0; }
     body.dark-mode .dod-text-view.dod-text-done { color: #64748b; }
+    body.dark-mode .dod-assignee { background: #0f172a; border-color: #334155; color: #e2e8f0; }
     body.dark-mode .subtask-dod-list { border-left-color: #334155; }
     body.dark-mode .subtask-dod-list.dod-all-done { border-left-color: #4ade80; }
     body.dark-mode .subtask-dod-label { color: #94a3b8; }
