@@ -6644,18 +6644,15 @@ function openEditTaskModal(taskId, preserveAssignees) {
         html += '</div>';
       }
       // Edit view (hidden by default)
-      // Assignés multiples : liste de cases à cocher (comme les tâches, séparés par virgule)
-      var stAssignees = (st.Assignee || '').split(',').map(function(a) { return a.trim(); }).filter(Boolean);
-      var assigneeListHtml = '<div class="st-assignee-list" id="st-assignee-' + st.id + '" style="display:flex;flex-wrap:wrap;gap:4px 10px;max-height:84px;overflow-y:auto;padding:6px 8px;border:1px solid #e2e8f0;border-radius:8px;">';
-      if (users.length === 0) {
-        assigneeListHtml += '<span style="font-size:11px;color:#94a3b8;">' + (currentLang === 'fr' ? 'Aucun membre' : 'No members') + '</span>';
-      }
+      // Responsable : liste déroulante à choix unique (comme pour les tâches)
+      var stAssigneeSel = (st.Assignee || '').split(',').map(function(a) { return a.trim(); }).filter(Boolean)[0] || '';
+      var assigneeListHtml = '<select id="st-assignee-' + st.id + '" class="st-dep-select" style="width:100%;">';
+      assigneeListHtml += '<option value="">--</option>';
       for (var ui = 0; ui < users.length; ui++) {
         var uName = users[ui].Name;
-        var uChk = stAssignees.indexOf(uName) !== -1 ? ' checked' : '';
-        assigneeListHtml += '<label style="display:inline-flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;white-space:nowrap;"><input type="checkbox" value="' + sanitize(uName) + '"' + uChk + '> ' + sanitize(uName) + '</label>';
+        assigneeListHtml += '<option value="' + sanitize(uName) + '"' + (uName === stAssigneeSel ? ' selected' : '') + '>' + sanitize(uName) + '</option>';
       }
-      assigneeListHtml += '</div>';
+      assigneeListHtml += '</select>';
       var stDueDateInput = st.Due_Date ? new Date(st.Due_Date * 1000).toISOString().split('T')[0] : '';
       var stStatus = st.Status || 'todo';
       var stPriority = st.Priority || 'medium';
@@ -6697,12 +6694,9 @@ function openEditTaskModal(taskId, preserveAssignees) {
       html += '</div>';
       html += '<input type="hidden" id="st-priority-' + st.id + '" value="' + stPriority + '">';
       html += '</div>';
-      // Assignés (multiples)
+      // Responsable (choix unique)
       html += '<div>';
-      html += '<div class="st-pill-label">' + t('subtaskAssignee') + (currentLang === 'fr' ? ' (plusieurs possibles)' : ' (multiple)') + '</div>';
-      if (users.length > 1) {
-        html += '<input type="text" id="st-assignee-search-' + st.id + '" oninput="filterStAssignees(' + st.id + ', this.value)" placeholder="' + (currentLang === 'fr' ? '🔍 Rechercher un membre...' : '🔍 Search a member...') + '" style="width:100%;padding:5px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;margin-bottom:4px;" autocomplete="off">';
-      }
+      html += '<div class="st-pill-label">' + t('subtaskAssignee') + '</div>';
       html += assigneeListHtml;
       html += '</div>';
       // Date + hours row
@@ -7573,21 +7567,13 @@ function cancelEditSubtask(subtaskId) {
 // après un re-render de la modale (ajout/modif/suppression d'un critère DoD).
 function snapshotSubtaskForm(subtaskId) {
   var snap = null;
-  ['st-title-','st-desc-','st-type-','st-status-','st-priority-','st-start-','st-due-','st-hours-','st-assignee-search-'].forEach(function(pfx) {
+  ['st-title-','st-desc-','st-type-','st-status-','st-priority-','st-start-','st-due-','st-hours-','st-assignee-'].forEach(function(pfx) {
     var el = document.getElementById(pfx + subtaskId);
     if (el) {
       if (!snap) snap = {};
       snap[pfx] = el.value;
     }
   });
-  var box = document.getElementById('st-assignee-' + subtaskId);
-  if (box) {
-    if (!snap) snap = {};
-    snap.assignees = [];
-    box.querySelectorAll('input[type="checkbox"]').forEach(function(c) {
-      if (c.checked) snap.assignees.push(c.value);
-    });
-  }
   return snap;
 }
 
@@ -7596,21 +7582,10 @@ function snapshotSubtaskForm(subtaskId) {
 function restoreSubtaskForm(subtaskId, snap) {
   if (snap) startEditSubtask(subtaskId);   // formulaire fermé avant l'opération : ne pas l'ouvrir
   if (!snap) return;
-  ['st-title-','st-desc-','st-start-','st-due-','st-hours-'].forEach(function(pfx) {
+  ['st-title-','st-desc-','st-assignee-','st-start-','st-due-','st-hours-'].forEach(function(pfx) {
     var el = document.getElementById(pfx + subtaskId);
     if (el && snap[pfx] !== undefined) el.value = snap[pfx];
   });
-  var search = document.getElementById('st-assignee-search-' + subtaskId);
-  if (search && snap['st-assignee-search-'] !== undefined) {
-    search.value = snap['st-assignee-search-'];
-    filterStAssignees(subtaskId, snap['st-assignee-search-']);
-  }
-  var box = document.getElementById('st-assignee-' + subtaskId);
-  if (box && snap.assignees) {
-    box.querySelectorAll('input[type="checkbox"]').forEach(function(c) {
-      c.checked = snap.assignees.indexOf(c.value) !== -1;
-    });
-  }
   // Pastilles type/statut/priorité : clique le bouton correspondant pour
   // resynchroniser le visuel et le champ caché sur la valeur figée.
   [['st-type-group-', snap['st-type-']], ['st-status-group-', snap['st-status-']], ['st-priority-group-', snap['st-priority-']]].forEach(function(pair) {
@@ -7622,34 +7597,20 @@ function restoreSubtaskForm(subtaskId, snap) {
   var dodInput = document.getElementById('st-dod-new-' + subtaskId);
   if (dodInput) dodInput.focus();
 }
-// Filtre la liste des assignés d'une sous-tâche selon la saisie clavier
-function filterStAssignees(subtaskId, query) {
-  var box = document.getElementById('st-assignee-' + subtaskId);
-  if (!box) return;
-  var q = (query || '').toLowerCase().trim();
-  box.querySelectorAll('label').forEach(function(lbl) {
-    var name = (lbl.textContent || '').toLowerCase();
-    lbl.style.display = (!q || name.indexOf(q) !== -1) ? '' : 'none';
-  });
-}
 
 async function saveEditSubtask(subtaskId, parentTaskId) {
   var titleInput    = document.getElementById('st-title-'    + subtaskId);
   var descInput     = document.getElementById('st-desc-'     + subtaskId);
   var statusSel     = document.getElementById('st-status-'   + subtaskId);
   var prioritySel   = document.getElementById('st-priority-' + subtaskId);
-  var assigneeBox   = document.getElementById('st-assignee-' + subtaskId);
+  var assigneeSel   = document.getElementById('st-assignee-' + subtaskId);
   var startDateInput= document.getElementById('st-start-'    + subtaskId);
   var dueDateInput  = document.getElementById('st-due-'      + subtaskId);
   var hoursInput    = document.getElementById('st-hours-'    + subtaskId);
   if (!titleInput) return;
   var newTitle = titleInput.value.trim();
   if (!newTitle) return;
-  var newAssignee = '';
-  if (assigneeBox) {
-    var checked = assigneeBox.querySelectorAll('input[type="checkbox"]:checked');
-    newAssignee = Array.prototype.map.call(checked, function(c) { return c.value; }).join(', ');
-  }
+  var newAssignee = assigneeSel ? assigneeSel.value : '';
   var newStartDate = startDateInput && startDateInput.value ? Math.floor(new Date(startDateInput.value).getTime() / 1000) : null;
   var newDueDate = dueDateInput && dueDateInput.value ? Math.floor(new Date(dueDateInput.value).getTime() / 1000) : null;
   var newStatus = statusSel ? statusSel.value : 'todo';
